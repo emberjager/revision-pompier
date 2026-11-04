@@ -1,0 +1,14 @@
+{
+  "name": "Révisions Sapeur-Pompier",
+  "short_name": "Révisions SP",
+  "description": "QCM, cartes mémoire, fiches et cas pratiques pour sapeurs-pompiers.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f2f1ef",
+  "theme_color": "#c11f2a",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
