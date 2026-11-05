@@ -190,3 +190,4 @@ a.btn{text-decoration:none;display:inline-block}
 .errlist li p.src{color:var(--muted);font-weight:400}
 .fiche.corr summary{padding:12px 14px;font-weight:600}
 .fiche.corr .errlist{padding:0 14px 14px}
+.select{width:100%;max-width:100%;font:inherit;font-size:.95rem;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px}

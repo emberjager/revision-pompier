@@ -180,9 +180,20 @@ function bindAccueil(){
 
 /* ---------- QCM ---------- */
 let quiz = null;
-let qcmSetup = {n:10, mode:"all"};
-function startQuiz(themes, n, mode){
-  let pool = visQ().filter(q=>themes.includes(q.t));
+let qcmSetup = {n:10, mode:"all", src:""};
+/* Référentiel d'une question : source citée en fin d'explication (variantes de nom regroupées) */
+const SRC_ALIAS = {"GTO Lutte contre les FDF et espaces naturels 2021":"GTO Lutte contre les feux de forêts et d'espaces naturels 2021", "GDO SSUAP 2022":"GDO Secours et soins d'urgence aux personnes 2022"};
+const NOSRC = "Notions générales (sans référentiel)";
+function srcOf(q){ const s = splitE(q.e).src; return s ? (SRC_ALIAS[s]||s) : NOSRC; }
+function srcOptions(){
+  const c = {}; visQ().forEach(q=>{ const s=srcOf(q); c[s]=(c[s]||0)+1; });
+  const grp = {GTO:[], GDO:[], Autres:[]};
+  Object.keys(c).sort((a,b)=>a.localeCompare(b,"fr")).forEach(s=>{ const g=/^GTO /.test(s)?"GTO":/^GDO /.test(s)?"GDO":"Autres"; grp[g].push(s); });
+  const opt = s => `<option value="${s.replace(/"/g,"&quot;")}" ${qcmSetup.src===s?"selected":""}>${s.replace(/^(GTO|GDO) /,"")} (${c[s]})</option>`;
+  return `<option value="">Tous — selon les thèmes choisis</option>` + Object.entries(grp).filter(([,l])=>l.length).map(([g,l])=>`<optgroup label="${g}">${l.map(opt).join("")}</optgroup>`).join("");
+}
+function startQuiz(themes, n, mode, src){
+  let pool = visQ().filter(q=> src ? srcOf(q)===src : themes.includes(q.t));
   if(mode==="err") pool = pool.filter(q=>S.qp[q.id]&&!S.qp[q.id].ok);
   if(mode==="new") pool = pool.filter(q=>!S.qp[q.id]);
   if(mode==="due") pool = pool.filter(q=>isDue(S.qp[q.id]));
@@ -196,9 +207,12 @@ function startQuiz(themes, n, mode){
 }
 function vQcm(){
   if(!quiz) return `
-    <section style="display:grid;gap:8px"><span class="label">QCM · ${LV[S.obj]}</span><h2>Lancer un quiz</h2><p class="lead">Choisis les thèmes, le nombre de questions et les questions à travailler. Correction et explication après chaque réponse, juste ou fausse, puis correction détaillée à la fin.</p></section>
+    <section style="display:grid;gap:8px"><span class="label">QCM · ${LV[S.obj]}</span><h2>Lancer un quiz</h2><p class="lead">Choisis les thèmes ou un GTO/GDO précis, le nombre de questions et les questions à travailler. Correction et explication après chaque réponse, juste ou fausse, puis correction détaillée à la fin.</p></section>
     <div class="panel">
       <span class="label">Thèmes</span>${themeChips()}
+      <label class="label" for="qsrc">Référentiel (GTO / GDO)</label>
+      <select id="qsrc" class="select">${srcOptions()}</select>
+      ${qcmSetup.src?`<p class="muted" style="font-size:.85rem;margin:0">Thèmes ignorés : toutes les questions de ce référentiel, quel que soit le thème.</p>`:""}
       <span class="label">Nombre de questions</span>
       <div class="chips" id="qn">${[10,20,999].map(n=>`<button type="button" class="chip" data-n="${n}" aria-pressed="${qcmSetup.n===n}">${n===999?"Toutes":n}</button>`).join("")}</div>
       <span class="label">Questions</span>
@@ -264,7 +278,8 @@ function bindQcm(){
   bindChips(render);
   const qn=$("#qn"); if(qn) qn.onclick=e=>{const b=e.target.closest("[data-n]"); if(b){qcmSetup.n=+b.dataset.n; render();}};
   const qm=$("#qm"); if(qm) qm.onclick=e=>{const b=e.target.closest("[data-m]"); if(b){qcmSetup.mode=b.dataset.m; render();}};
-  const go=$("#qgo"); if(go) go.onclick=()=>{ startQuiz(activeThemes(),qcmSetup.n,qcmSetup.mode); render(); };
+  const qs=$("#qsrc"); if(qs) qs.onchange=()=>{ qcmSetup.src=qs.value; render(); };
+  const go=$("#qgo"); if(go) go.onclick=()=>{ startQuiz(activeThemes(),qcmSetup.n,qcmSetup.mode,qcmSetup.src); render(); };
   document.querySelectorAll(".opt").forEach(b=>b.onclick=()=>pick(+b.dataset.oi));
   const nx=$("#qnext"); if(nx){ nx.onclick=next; nx.focus({preventScroll:true}); }
   const st=$("#qstop"); if(st) st.onclick=()=>{ quiz=null; render(); };
