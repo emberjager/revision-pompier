@@ -31,10 +31,13 @@
 <main class="wrap" id="view"></main>
 <footer class="wrap note">
   <p>Contenu de départ rédigé à partir des notions générales (PSE, GNR, guides de doctrine). Les procédures et valeurs peuvent varier selon les référentiels en vigueur et ton SDIS : vérifie toujours avec tes supports de formation officiels.</p>
-  <p>Ta progression est enregistrée dans ce navigateur uniquement (synchronisation entre appareils à venir).</p>
+  <p>Ta progression est enregistrée sur cet appareil, et synchronisée entre tes appareils quand tu es connecté (onglet « Se connecter »).</p>
 </footer>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="js/config.js"></script>
 <script src="js/data.js"></script>
 <script src="js/app.js"></script>
+<script src="js/sync.js"></script>
 <script>
   if ("serviceWorker" in navigator && location.protocol === "https:") {
     navigator.serviceWorker.register("sw.js").catch(() => {});

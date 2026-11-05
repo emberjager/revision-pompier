@@ -132,3 +132,7 @@ main{padding-block:24px 40px;display:grid;gap:22px}
 .note{font-size:.85rem;color:var(--muted);padding-block:0 32px;display:grid;gap:6px}
 .confirm{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .empty{color:var(--muted);padding:20px;text-align:center;border:1px dashed var(--line);border-radius:10px}
+
+/* Formulaires */
+.field{width:100%;max-width:420px;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.field:focus{outline:3px solid var(--hivis);outline-offset:1px;border-color:var(--ink)}

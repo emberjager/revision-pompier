@@ -15,7 +15,7 @@ const S = {
   fp: LS.get("fp",{}),   // cartes : id -> true (maîtrisée)
   cp: LS.get("cp",{})    // cas : id -> meilleur score
 };
-const save = () => { LS.set("obj",S.obj); LS.set("themes",S.themes); LS.set("qp",S.qp); LS.set("fp",S.fp); LS.set("cp",S.cp); };
+const save = () => { LS.set("obj",S.obj); LS.set("themes",S.themes); LS.set("qp",S.qp); LS.set("fp",S.fp); LS.set("cp",S.cp); if (window.onLocalSave) window.onLocalSave(); };
 
 const lvOk = x => S.obj==="tous" || !x.l || x.l.split(" ").includes(S.obj);
 const visQ = () => ALLQ.filter(lvOk);
