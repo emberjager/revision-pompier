@@ -180,7 +180,7 @@ function bindAccueil(){
 
 /* ---------- QCM ---------- */
 let quiz = null;
-let qcmSetup = {n:10, mode:"all", src:""};
+let qcmSetup = {n:10, mode:"all", src:[], srcOpen:false};
 /* Référentiel d'une question : source citée en fin d'explication (variantes de nom regroupées) */
 const SRC_ALIAS = {"GTO Lutte contre les FDF et espaces naturels 2021":"GTO Lutte contre les feux de forêts et d'espaces naturels 2021", "GDO SSUAP 2022":"GDO Secours et soins d'urgence aux personnes 2022"};
 const NOSRC = "Notions générales (sans référentiel)";
@@ -189,11 +189,14 @@ function srcOptions(){
   const c = {}; visQ().forEach(q=>{ const s=srcOf(q); c[s]=(c[s]||0)+1; });
   const grp = {GTO:[], GDO:[], Autres:[]};
   Object.keys(c).sort((a,b)=>a.localeCompare(b,"fr")).forEach(s=>{ const g=/^GTO /.test(s)?"GTO":/^GDO /.test(s)?"GDO":"Autres"; grp[g].push(s); });
-  const opt = s => `<option value="${s.replace(/"/g,"&quot;")}" ${qcmSetup.src===s?"selected":""}>${s.replace(/^(GTO|GDO) /,"")} (${c[s]})</option>`;
-  return `<option value="">Tous — selon les thèmes choisis</option>` + Object.entries(grp).filter(([,l])=>l.length).map(([g,l])=>`<optgroup label="${g}">${l.map(opt).join("")}</optgroup>`).join("");
+  const sel = qcmSetup.src, nb = sel.reduce((a,s)=>a+(c[s]||0),0);
+  const box = s => `<label class="srcopt"><input type="checkbox" value="${s.replace(/"/g,"&quot;")}" ${sel.includes(s)?"checked":""}><span>${s.replace(/^(GTO|GDO) /,"")}</span><small class="num">${c[s]}</small></label>`;
+  return `<details class="fiche corr srcpick" id="qsrc" ${qcmSetup.srcOpen?"open":""}><summary>${sel.length?`${sel.length} référentiel${sel.length>1?"s":""} choisi${sel.length>1?"s":""} · ${nb} questions`:"Tous — selon les thèmes choisis"}</summary>
+    <div class="srclist">${Object.entries(grp).filter(([,l])=>l.length).map(([g,l])=>`<p class="label">${g}</p>${l.map(box).join("")}`).join("")}
+    ${sel.length?`<div><button type="button" class="btn" id="qsrc-clear">Tout décocher</button></div>`:""}</div></details>`;
 }
 function startQuiz(themes, n, mode, src){
-  let pool = visQ().filter(q=> src ? srcOf(q)===src : themes.includes(q.t));
+  let pool = visQ().filter(q=> src&&src.length ? src.includes(srcOf(q)) : themes.includes(q.t));
   if(mode==="err") pool = pool.filter(q=>S.qp[q.id]&&!S.qp[q.id].ok);
   if(mode==="new") pool = pool.filter(q=>!S.qp[q.id]);
   if(mode==="due") pool = pool.filter(q=>isDue(S.qp[q.id]));
@@ -210,9 +213,9 @@ function vQcm(){
     <section style="display:grid;gap:8px"><span class="label">QCM · ${LV[S.obj]}</span><h2>Lancer un quiz</h2><p class="lead">Choisis les thèmes ou un GTO/GDO précis, le nombre de questions et les questions à travailler. Correction et explication après chaque réponse, juste ou fausse, puis correction détaillée à la fin.</p></section>
     <div class="panel">
       <span class="label">Thèmes</span>${themeChips()}
-      <label class="label" for="qsrc">Référentiel (GTO / GDO)</label>
-      <select id="qsrc" class="select">${srcOptions()}</select>
-      ${qcmSetup.src?`<p class="muted" style="font-size:.85rem;margin:0">Thèmes ignorés : toutes les questions de ce référentiel, quel que soit le thème.</p>`:""}
+      <span class="label">Référentiels (GTO / GDO) — plusieurs choix possibles</span>
+      ${srcOptions()}
+      ${qcmSetup.src.length?`<p class="muted" style="font-size:.85rem;margin:0">Thèmes ignorés : questions des référentiels cochés, quel que soit le thème.</p>`:""}
       <span class="label">Nombre de questions</span>
       <div class="chips" id="qn">${[10,20,999].map(n=>`<button type="button" class="chip" data-n="${n}" aria-pressed="${qcmSetup.n===n}">${n===999?"Toutes":n}</button>`).join("")}</div>
       <span class="label">Questions</span>
@@ -278,7 +281,11 @@ function bindQcm(){
   bindChips(render);
   const qn=$("#qn"); if(qn) qn.onclick=e=>{const b=e.target.closest("[data-n]"); if(b){qcmSetup.n=+b.dataset.n; render();}};
   const qm=$("#qm"); if(qm) qm.onclick=e=>{const b=e.target.closest("[data-m]"); if(b){qcmSetup.mode=b.dataset.m; render();}};
-  const qs=$("#qsrc"); if(qs) qs.onchange=()=>{ qcmSetup.src=qs.value; render(); };
+  const qs=$("#qsrc"); if(qs){
+    qs.ontoggle=()=>{ qcmSetup.srcOpen=qs.open; };
+    qs.onchange=e=>{ const v=e.target.value; if(!v) return; qcmSetup.src = e.target.checked ? [...qcmSetup.src.filter(s=>s!==v), v] : qcmSetup.src.filter(s=>s!==v); qcmSetup.srcOpen=true; render(); };
+    const cl=$("#qsrc-clear"); if(cl) cl.onclick=()=>{ qcmSetup.src=[]; render(); };
+  }
   const go=$("#qgo"); if(go) go.onclick=()=>{ startQuiz(activeThemes(),qcmSetup.n,qcmSetup.mode,qcmSetup.src); render(); };
   document.querySelectorAll(".opt").forEach(b=>b.onclick=()=>pick(+b.dataset.oi));
   const nx=$("#qnext"); if(nx){ nx.onclick=next; nx.focus({preventScroll:true}); }
