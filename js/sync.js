@@ -2,7 +2,7 @@
 const SB = (window.supabase && window.RSP_CONFIG)
   ? window.supabase.createClient(RSP_CONFIG.supabaseUrl, RSP_CONFIG.supabaseKey, {auth:{flowType:"implicit", persistSession:true, detectSessionInUrl:true}})
   : null;
-const acct = {user:null, pseudo:"", status:"", sent:"", busy:false, lastSync:null};
+const acct = {user:null, pseudo:"", status:"", info:"", sent:"", busy:false, lastSync:null, recovery:false};
 const escHtml = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
 /* Fusion : pour chaque question on garde l'entrée la plus travaillée ; cartes maîtrisées réunies ; meilleur score des cas. */
@@ -51,20 +51,32 @@ function setTabLabel(){ ROUTES.compte = acct.user ? (acct.pseudo || "Mon compte"
 /* ---------- Vue Compte ---------- */
 function vCompte(){
   if(!SB) return `<section style="display:grid;gap:8px"><h2>Compte</h2><p class="lead">La connexion n'est pas disponible (pas de réseau ?). Tu peux réviser normalement : ta progression reste sur cet appareil et sera synchronisée à ta prochaine connexion.</p></section>`;
+  if(acct.recovery) return `
+    <section style="display:grid;gap:8px"><span class="label">Compte</span><h2>Nouveau mot de passe</h2></section>
+    <form class="panel" id="newpw">
+      <label class="label" for="npw">Nouveau mot de passe (8 caractères minimum)</label>
+      <input id="npw" type="password" class="field" minlength="8" required autocomplete="new-password">
+      <div><button class="btn primary" type="submit">Enregistrer</button></div>
+    </form>
+    ${acct.status?`<p class="explain no">${escHtml(acct.status)}</p>`:""}`;
   if(!acct.user) return `
     <section style="display:grid;gap:8px"><span class="label">Compte</span><h2>Se connecter</h2>
-    <p class="lead">Connecte-toi pour retrouver ta progression sur ton téléphone et ton ordinateur. Pas de mot de passe : tu reçois un e-mail de connexion.</p></section>
+    <p class="lead">Connecte-toi pour retrouver ta progression sur ton téléphone et ton ordinateur.</p></section>
     <form class="panel" id="login">
       <label class="label" for="email">Adresse e-mail</label>
       <input id="email" type="email" required autocomplete="email" inputmode="email" class="field" placeholder="prenom.nom@exemple.fr" value="${escHtml(acct.sent)}">
-      <div><button class="btn primary" type="submit" ${acct.busy?"disabled":""}>Recevoir l'e-mail de connexion</button></div>
+      <label class="label" for="pw">Mot de passe</label>
+      <input id="pw" type="password" class="field" minlength="8" autocomplete="current-password">
+      <div class="row">
+        <button class="btn primary" type="submit" data-act="signin" ${acct.busy?"disabled":""}>Se connecter</button>
+        <button class="btn" type="submit" data-act="signup" ${acct.busy?"disabled":""}>Créer mon compte</button>
+      </div>
+      <div class="row">
+        <button class="btn" type="submit" data-act="link" formnovalidate ${acct.busy?"disabled":""}>Recevoir un lien par e-mail</button>
+        <button class="btn" type="submit" data-act="reset" formnovalidate ${acct.busy?"disabled":""}>Mot de passe oublié</button>
+      </div>
     </form>
-    ${acct.sent?`<form class="panel" id="otp">
-      <p>E-mail envoyé à <b>${escHtml(acct.sent)}</b>. Clique sur le lien qu'il contient. Si le site est installé sur ton écran d'accueil, tape plutôt ici le code à 6 chiffres de l'e-mail.</p>
-      <label class="label" for="code">Code reçu</label>
-      <input id="code" class="field num" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456">
-      <div><button class="btn primary" type="submit" ${acct.busy?"disabled":""}>Valider le code</button></div>
-    </form>`:""}
+    ${acct.info?`<p class="explain">${escHtml(acct.info)}</p>`:""}
     ${acct.status?`<p class="explain no">${escHtml(acct.status)}</p>`:""}`;
   return `
     <section style="display:grid;gap:8px"><span class="label">Compte</span><h2>${escHtml(acct.pseudo || "Mon compte")}</h2>
@@ -73,6 +85,12 @@ function vCompte(){
       <label class="label" for="pseudo">Pseudo (affiché plus tard dans le classement du CIS)</label>
       <input id="pseudo" class="field" maxlength="30" value="${escHtml(acct.pseudo)}" placeholder="Ex. Cpl Martin">
       <div><button class="btn" type="submit">Enregistrer le pseudo</button></div>
+    </form>
+    <form class="panel" id="setpw">
+      <label class="label" for="spw">Mot de passe (pour te connecter sans e-mail, par exemple dans l'appli installée)</label>
+      <input id="spw" type="password" class="field" minlength="8" required autocomplete="new-password" placeholder="8 caractères minimum">
+      <div><button class="btn" type="submit">Définir le mot de passe</button></div>
+      ${acct.info?`<p class="muted">${escHtml(acct.info)}</p>`:""}
     </form>
     <div class="panel">
       <span class="label">Synchronisation</span>
@@ -83,21 +101,45 @@ function vCompte(){
 function bindCompte(){
   const lg = $("#login");
   if(lg) lg.onsubmit = async e => {
-    e.preventDefault(); const email = $("#email").value.trim(); if(!email) return;
-    acct.busy = true; acct.status = ""; render();
-    const {error} = await SB.auth.signInWithOtp({email, options:{emailRedirectTo: location.origin + location.pathname}});
+    e.preventDefault();
+    const act = (e.submitter && e.submitter.dataset.act) || "signin";
+    const email = $("#email").value.trim(), password = $("#pw").value;
+    acct.sent = email; acct.status = ""; acct.info = "";
+    if(!email){ acct.status = "Indique ton adresse e-mail."; render(); return; }
+    if((act==="signin"||act==="signup") && password.length < 8){ acct.status = "Le mot de passe doit faire au moins 8 caractères."; render(); return; }
+    acct.busy = true; render();
+    const back = location.origin + location.pathname;
+    let error = null;
+    if(act==="signin") ({error} = await SB.auth.signInWithPassword({email, password}));
+    if(act==="signup"){
+      const r = await SB.auth.signUp({email, password, options:{emailRedirectTo: back}});
+      error = r.error;
+      if(!error && !r.data.session) acct.info = "Compte créé. Clique sur le lien de confirmation reçu par e-mail, puis connecte-toi ici avec ton mot de passe.";
+    }
+    if(act==="link"){ ({error} = await SB.auth.signInWithOtp({email, options:{emailRedirectTo: back}})); if(!error) acct.info = "E-mail envoyé : clique sur le lien qu'il contient."; }
+    if(act==="reset"){ ({error} = await SB.auth.resetPasswordForEmail(email, {redirectTo: back})); if(!error) acct.info = "E-mail envoyé : son lien te permettra de choisir un nouveau mot de passe."; }
     acct.busy = false;
-    if(error) acct.status = /rate|limit/i.test(error.message) ? "Trop de demandes d'e-mail : attends quelques minutes puis réessaie." : "Envoi impossible : " + error.message;
-    else acct.sent = email;
+    if(error) acct.status =
+      /rate|limit/i.test(error.message) ? "Trop de demandes d'e-mail : attends quelques minutes puis réessaie." :
+      /invalid login/i.test(error.message) ? "E-mail ou mot de passe incorrect. Si ton compte a été créé avec un lien, connecte-toi par lien puis définis un mot de passe dans ton compte." :
+      /not confirmed/i.test(error.message) ? "Adresse pas encore confirmée : clique sur le lien reçu par e-mail." :
+      /already registered/i.test(error.message) ? "Ce compte existe déjà : clique sur « Se connecter »." :
+      "Erreur : " + error.message;
     render();
   };
-  const otp = $("#otp");
-  if(otp) otp.onsubmit = async e => {
-    e.preventDefault(); const token = $("#code").value.replace(/\s/g,""); if(!token) return;
-    acct.busy = true; render();
-    const {error} = await SB.auth.verifyOtp({email:acct.sent, token, type:"email"});
-    acct.busy = false;
-    if(error){ acct.status = "Code refusé ou expiré. Redemande un e-mail."; render(); }
+  const np = $("#newpw");
+  if(np) np.onsubmit = async e => {
+    e.preventDefault();
+    const {error} = await SB.auth.updateUser({password: $("#npw").value});
+    if(error){ acct.status = "Mot de passe non enregistré : " + error.message; render(); return; }
+    acct.recovery = false; acct.status = ""; acct.info = "Mot de passe enregistré."; render();
+  };
+  const sp = $("#setpw");
+  if(sp) sp.onsubmit = async e => {
+    e.preventDefault();
+    const {error} = await SB.auth.updateUser({password: $("#spw").value});
+    acct.info = error ? "Mot de passe non enregistré : " + error.message : "Mot de passe enregistré. Tu peux maintenant te connecter avec, sur n'importe quel appareil.";
+    render();
   };
   const pf = $("#prof");
   if(pf) pf.onsubmit = async e => {
@@ -115,12 +157,13 @@ VIEWS.compte = [vCompte, bindCompte];
 
 if(SB){
   SB.auth.onAuthStateChange((event, session) => {
+    if(event === "PASSWORD_RECOVERY"){ acct.recovery = true; setTimeout(() => { location.hash = "compte"; render(); }, 0); }
     const u = session ? session.user : null;
     const changed = (u && u.id) !== (acct.user && acct.user.id);
     acct.user = u;
     if(!u){ acct.pseudo = ""; acct.lastSync = null; setTabLabel(); render(); return; }
     if(changed){
-      acct.sent = ""; acct.status = "";
+      acct.sent = ""; acct.status = ""; acct.info = "";
       // Les appels Supabase sont lancés hors du rappel, comme le recommande la librairie.
       setTimeout(async () => {
         await loadProfile(); setTabLabel();
