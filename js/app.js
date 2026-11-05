@@ -19,6 +19,10 @@ const S = {
   goal: LS.get("goal",20), // objectif du jour (réponses)
   ex: LS.get("ex",[])    // examens blancs : [{d, n, ok, note, min, used}]
 };
+// Thèmes ajoutés depuis la dernière visite : cochés d'office (OLD_TH = thèmes de la V1).
+const OLD_TH = ["suap","inc","div","sr","fdf","cult","com"];
+const withNewThemes = (themes, known) => [...themes, ...Object.keys(TH).filter(t => !known.includes(t) && !themes.includes(t))];
+S.themes = withNewThemes(S.themes, LS.get("thk", OLD_TH)); LS.set("thk", Object.keys(TH));
 const KEYS = ["obj","themes","qp","fp","cp","fs","days","goal","ex"];
 const save = () => { KEYS.forEach(k => LS.set(k, S[k])); if (window.onLocalSave) window.onLocalSave(); };
 

@@ -6,7 +6,7 @@ const LV = {fi:"SPV / FI", spp:"Concours SPP", av:"Avancement", tous:"Tous nivea
 const TH = {
   suap:{n:"Secours à personne",k:"SUAP"}, inc:{n:"Incendie",k:"INC"}, div:{n:"Opérations diverses",k:"DIV"},
   sr:{n:"Secours routier",k:"SR"}, fdf:{n:"Feux de forêt",k:"FDF"}, cult:{n:"Culture & matériel",k:"CULT"},
-  com:{n:"Commandement",k:"COM"}
+  com:{n:"Commandement",k:"COM"}, fr:{n:"Français",k:"FR"}, math:{n:"Mathématiques",k:"MATH"}
 };
 
 /* ---------- QCM (la bonne réponse est toujours la 1re option ; l'ordre est mélangé à l'affichage) ---------- */
@@ -101,7 +101,63 @@ com:[
  {q:"Qui est le commandant des opérations de secours (COS) ?",o:["Un sapeur-pompier désigné, sous l'autorité du DOS","Le maire","Le préfet","Le médecin du SAMU"],e:"Le DOS (maire ou préfet) dirige les opérations ; le COS commande les moyens sur le terrain.",l:"spp av"},
  {q:"Que désigne le PRV ?",o:["Point de rassemblement des victimes","Poste radio de veille","Plan de reconnaissance des voies","Point de ravitaillement des véhicules"],e:"Lieu de regroupement, de tri et de prise en charge avant évacuation.",l:"av"},
  {q:"Pourquoi le chef d'agrès fait-il une reconnaissance avant d'engager ?",o:["Pour évaluer risques et victimes et choisir l'idée de manœuvre","Par obligation administrative","Pour attendre les renforts","Pour prendre des photos"],e:"La reconnaissance oriente toute la manœuvre.",l:"av"}
-]};
+],
+fr:[
+{q:"« Les victimes que nous avons ___ ont été transportées. »",o:["secourues","secourus","secouru","secourut"],e:"Avec avoir, le participe passé s'accorde avec le COD placé avant : « que » reprend « les victimes » (féminin pluriel).",l:"spp"},
+{q:"« Ils ont ___ toute la nuit. » (travailler)",o:["travaillé","travaillés","travailler","travaillait"],e:"Avec avoir et sans COD placé avant, le participe passé reste invariable.",l:"spp"},
+{q:"« Les pompiers sont ___ rapidement. » (arriver)",o:["arrivés","arrivé","arriver","arrivées"],e:"Avec être, le participe passé s'accorde avec le sujet (masculin pluriel).",l:"spp"},
+{q:"« Elles se sont ___ en descendant l'échelle. » (blesser)",o:["blessées","blessé","blessés","blesser"],e:"Verbe pronominal : « se » est COD (elles ont blessé elles-mêmes), placé avant, donc accord.",l:"spp"},
+{q:"Complète : « Il ___ parti ___ la caserne. »",o:["est / à","et / à","est / a","et / a"],e:"« est » : on peut dire « était ». « à » préposition : on ne peut pas dire « avait ».",l:"spp"},
+{q:"Complète : « ___ un départ urgent. »",o:["C'est","S'est","Ces","Ses"],e:"« C'est » = cela est. « S'est » s'emploie devant un participe passé (il s'est blessé).",l:"spp"},
+{q:"Complète : « Nous ne savons pas ___ se trouve la victime. »",o:["où","ou","oû","ous"],e:"« où » indique le lieu ; « ou » signifie « ou bien ».",l:"spp"},
+{q:"Complète : « Il faut ___ la zone. »",o:["baliser","balisé","balisez","balisait"],e:"Après « il faut », on met l'infinitif. Astuce : remplace par « vendre » (il faut vendre).",l:"spp"},
+{q:"Complète : « Je ___ appelé les secours. »",o:["ai","est","es","et"],e:"Passé composé avec avoir : j'ai appelé.",l:"spp"},
+{q:"Complète : « Je ___ ai donné les consignes. » (à eux)",o:["leur","leurs","leurent","l'heure"],e:"Devant un verbe, « leur » est un pronom et ne prend jamais de s.",l:"spp"},
+{q:"Complète : « Le véhicule ___ la porte est ouverte. »",o:["dont","que","où","qui"],e:"« dont » remplace un complément introduit par « de » : la porte du véhicule.",l:"spp"},
+{q:"Complète : « ___ tu fasses, reste prudent. »",o:["Quoi que","Quoique","Quoiqu'","Quoi-que"],e:"« Quoi que » (en deux mots) = quelle que soit la chose que. « Quoique » (en un mot) = bien que.",l:"spp"},
+{q:"Complète : « Il faut que tu ___ prudent. » (être)",o:["sois","es","soit","serais"],e:"« Il faut que » appelle le subjonctif : que tu sois (« soit » est la 3e personne).",l:"spp"},
+{q:"Complète : « Demain, nous ___ en manœuvre. » (aller, futur)",o:["irons","allerons","irions","allions"],e:"Futur de aller : j'irai, tu iras, il ira, nous irons, vous irez, ils iront.",l:"spp"},
+{q:"Complète : « Si j'avais le temps, je ___ t'aider. » (venir)",o:["viendrais","viendrai","venais","viendrait"],e:"Si + imparfait entraîne le conditionnel présent : je viendrais.",l:"spp"},
+{q:"Imparfait de « crier » avec « nous » :",o:["nous criions","nous crions","nous criyons","nous crièrent"],e:"Imparfait : radical cri- + -ions, d'où deux i (« nous crions » est le présent).",l:"spp"},
+{q:"Quel mot est correctement orthographié ?",o:["nécessaire","nécéssaire","nécesaire","néssessaire"],e:"Un seul accent, un c, deux s.",l:"spp"},
+{q:"Pluriel de « un travail » :",o:["des travaux","des travails","des travailles","des travaus"],e:"Les noms en -ail font souvent leur pluriel en -aux : travail, corail, émail, vitrail…",l:"spp"},
+{q:"Pluriel de « un pneu » :",o:["des pneus","des pneux","des pneu","des pneues"],e:"Exceptions des noms en -eu qui prennent un s : pneu, bleu, émeu.",l:"spp"},
+{q:"Complète : « des gilets ___ » (marron)",o:["marron","marrons","marronnes","marronnés"],e:"Les adjectifs de couleur issus d'un nom (marron, orange, cerise…) restent invariables. Exceptions : rose, mauve, fauve, pourpre.",l:"spp"},
+{q:"Dans « Il court vite », le mot « vite » est :",o:["un adverbe","un adjectif","un verbe","un nom"],e:"Il modifie le verbe « court » et ne s'accorde pas.",l:"spp"},
+{q:"Que signifie « imminent » ?",o:["Qui va se produire très bientôt","Qui est très important","Qui est dangereux","Qui s'est déjà produit"],e:"Ne pas confondre avec « éminent » (remarquable, important).",l:"spp"},
+{q:"Quel est le synonyme de « prompt » ?",o:["rapide","lent","prudent","brutal"],e:"Un prompt rétablissement = un rétablissement rapide.",l:"spp"},
+{q:"Quel est le contraire de « ascendant » ?",o:["descendant","montant","croissant","adjacent"],e:"Ascendant : qui monte ; descendant : qui descend.",l:"spp"}
+],
+math:[
+{q:"Une lance débite 500 L/min pendant 12 min. Quelle quantité d'eau a-t-elle utilisée ?",o:["6 000 L","600 L","5 120 L","60 000 L"],e:"Quantité = débit × durée = 500 × 12 = 6 000 L.",l:"spp"},
+{q:"Un engin a une réserve de 3 000 L et alimente une lance à 250 L/min. Quelle est son autonomie ?",o:["12 min","10 min","15 min","7 min 30 s"],e:"Autonomie = volume ÷ débit = 3 000 ÷ 250 = 12 min.",l:"spp"},
+{q:"Combien de litres dans 1 m³ ?",o:["1 000 L","100 L","10 000 L","10 L"],e:"1 m³ = 1 000 dm³ et 1 dm³ = 1 L.",l:"spp"},
+{q:"60 m³/h correspondent à :",o:["1 000 L/min","600 L/min","100 L/min","3 600 L/min"],e:"60 m³/h = 60 000 L ÷ 60 min = 1 000 L/min.",l:"spp"},
+{q:"Pour 1 000 L de solution moussante dosée à 3 %, combien faut-il d'émulseur ?",o:["30 L","3 L","300 L","33 L"],e:"3 % de 1 000 L = 1 000 × 3 ÷ 100 = 30 L.",l:"spp"},
+{q:"Une bouteille d'ARI de 6 L gonflée à 300 bar contient environ :",o:["1 800 L d'air","306 L d'air","50 L d'air","18 000 L d'air"],e:"Volume d'air détendu ≈ capacité × pression = 6 × 300 = 1 800 L (approximation).",l:"spp"},
+{q:"Combien font 15 % de 240 ?",o:["36","24","32","40"],e:"240 × 15 ÷ 100 = 36 (10 % = 24, 5 % = 12).",l:"spp"},
+{q:"Un article à 80 € augmente de 25 %. Nouveau prix ?",o:["100 €","105 €","95 €","120 €"],e:"80 × 1,25 = 100 €.",l:"spp"},
+{q:"Après une baisse de 20 %, un article coûte 64 €. Quel était son prix ?",o:["80 €","76,80 €","84 €","78 €"],e:"Prix × 0,8 = 64, donc prix = 64 ÷ 0,8 = 80 €. Ajouter 20 % à 64 € est un piège.",l:"spp"},
+{q:"Dans un centre de 40 sapeurs-pompiers, 10 sont professionnels. Quel pourcentage ?",o:["25 %","40 %","10 %","4 %"],e:"10 ÷ 40 = 0,25 = 25 %.",l:"spp"},
+{q:"Un engin parcourt 45 km en 30 min. Sa vitesse moyenne est :",o:["90 km/h","45 km/h","75 km/h","135 km/h"],e:"30 min = 0,5 h ; v = 45 ÷ 0,5 = 90 km/h.",l:"spp"},
+{q:"Combien de temps pour parcourir 12 km à 80 km/h ?",o:["9 min","15 min","6 min","12 min"],e:"t = 12 ÷ 80 = 0,15 h = 0,15 × 60 = 9 min.",l:"spp"},
+{q:"2,5 h correspondent à :",o:["2 h 30 min","2 h 50 min","2 h 25 min","2 h 05 min"],e:"0,5 h = 30 min. Ne pas lire les décimales d'heure comme des minutes.",l:"spp"},
+{q:"1 h 45 min, c'est combien de minutes ?",o:["105 min","145 min","95 min","115 min"],e:"60 + 45 = 105 min.",l:"spp"},
+{q:"Départ à 23 h 40, l'intervention dure 2 h 35. Heure de fin ?",o:["2 h 15","1 h 15","3 h 15","2 h 05"],e:"23 h 40 + 2 h 35 = 25 h 75 = 26 h 15, soit 2 h 15 le lendemain.",l:"spp"},
+{q:"Aire d'un local rectangulaire de 12 m sur 8 m ?",o:["96 m²","40 m²","80 m²","192 m²"],e:"Aire = longueur × largeur = 12 × 8 = 96 m².",l:"spp"},
+{q:"Volume d'une pièce de 5 m × 4 m × 2,5 m de haut ?",o:["50 m³","11,5 m³","45 m³","500 m³"],e:"Volume = 5 × 4 × 2,5 = 50 m³.",l:"spp"},
+{q:"Périmètre d'un carré de 7 m de côté ?",o:["28 m","49 m","14 m","21 m"],e:"Périmètre = 4 × côté = 28 m (49 m² est son aire).",l:"spp"},
+{q:"Aire d'un cercle de 10 m de rayon (π ≈ 3,14) ?",o:["314 m²","62,8 m²","31,4 m²","628 m²"],e:"Aire = π × r² = 3,14 × 100 = 314 m² (62,8 m est le périmètre).",l:"spp"},
+{q:"3 bouteilles coûtent 450 €. Combien coûtent 5 bouteilles ?",o:["750 €","600 €","900 €","650 €"],e:"Règle de trois : 450 ÷ 3 = 150 € l'unité, × 5 = 750 €.",l:"spp"},
+{q:"Moyenne de 12, 15, 9 et 14 ?",o:["12,5","12","13","11,5"],e:"(12 + 15 + 9 + 14) ÷ 4 = 50 ÷ 4 = 12,5.",l:"spp"},
+{q:"Combien font les 3/4 de 120 ?",o:["90","80","40","100"],e:"120 ÷ 4 = 30, × 3 = 90.",l:"spp"},
+{q:"Quelle fraction est égale à 0,25 ?",o:["1/4","2/5","1/25","25/10"],e:"1 ÷ 4 = 0,25.",l:"spp"},
+{q:"Combien font 1,2 × 0,5 ?",o:["0,6","6","0,06","1,7"],e:"Multiplier par 0,5 revient à diviser par 2.",l:"spp"},
+{q:"Résous : 3x + 5 = 20",o:["x = 5","x = 15","x = 7","x = 3"],e:"3x = 20 − 5 = 15, donc x = 15 ÷ 3 = 5.",l:"spp"},
+{q:"Sur une carte au 1/25 000, 4 cm représentent :",o:["1 km","10 km","100 m","4 km"],e:"4 × 25 000 = 100 000 cm = 1 000 m = 1 km.",l:"spp"},
+{q:"2,5 km, c'est :",o:["2 500 m","250 m","25 000 m","25 m"],e:"1 km = 1 000 m.",l:"spp"}
+]
+};
 
 /* ---------- Cartes mémoire ---------- */
 const FDATA = {
@@ -111,7 +167,9 @@ div:[["Fuite de gaz","Aucune étincelle · couper le gaz · aérer · évacuer �
 sr:[["Règle 30-60-90","Airbags non déclenchés : latéral 30 cm · conducteur 60 cm · passager 90 cm"],["Câbles orange","Haute tension (électrique / hybride) : ne jamais couper"],["Outils hydrauliques","Cisaille : couper · Écarteur : écarter · Vérin : pousser"],["Chronologie SR","Protection, reconnaissance, calage, accès et bilan, création d'espace, extraction"]],
 fdf:[["Parties d'un feu","Tête · flancs · queue · doigts · sautes de feu"],["Facteurs de propagation","Météo · relief · végétation"],["GIFF","4 CCF + chef de groupe"],["OLD","50 m autour des constructions (jusqu'à 100 m par arrêté)"],["Autoprotection CCF","Équipage en cabine, vitres fermées, rampes d'arrosage en fonction"]],
 cult:[["Numéros d'urgence","15 SAMU · 17 police · 18 pompiers · 112 Europe · 114 SMS"],["Sous-officiers","Sergent · sergent-chef · adjudant · adjudant-chef"],["Officiers","Lieutenant · capitaine · commandant · lieutenant-colonel · colonel"],["DOS / COS","DOS : maire ou préfet · COS : sapeur-pompier désigné",{l:"spp av"}],["Sainte-Barbe","4 décembre"]],
-com:[["SOIEC","Situation · Objectifs · Idée de manœuvre · Exécution · Commandement",{l:"av"}],["Message de renseignements","Je suis · je vois · je prévois · je fais · je demande",{l:"av"}],["PRV","Point de rassemblement des victimes",{l:"av"}]]
+com:[["SOIEC","Situation · Objectifs · Idée de manœuvre · Exécution · Commandement",{l:"av"}],["Message de renseignements","Je suis · je vois · je prévois · je fais · je demande",{l:"av"}],["PRV","Point de rassemblement des victimes",{l:"av"}]],
+fr:[["Participe passé avec avoir","Accord avec le COD seulement s'il est placé avant le verbe",{"l":"spp"}],["Participe passé avec être","Accord avec le sujet",{"l":"spp"}],["a ou à ?","« a » si on peut dire « avait »",{"l":"spp"}],["et ou est ?","« est » si on peut dire « était »",{"l":"spp"}],["-er ou -é ?","Remplacer par « vendre / vendu » : vendre → -er, vendu → -é",{"l":"spp"}],["ou ou où ?","« ou » = ou bien · « où » = lieu ou moment",{"l":"spp"}],["leur ou leurs ?","Devant un verbe : leur (jamais de s) · devant un nom pluriel : leurs",{"l":"spp"}],["Si + imparfait","→ conditionnel : si j'avais, je viendrais",{"l":"spp"}]],
+math:[["m³/h → L/min","× 1 000 puis ÷ 60 (60 m³/h = 1 000 L/min)",{"l":"spp"}],["1 m³","1 000 L · 1 L = 1 dm³",{"l":"spp"}],["x % de N","N × x ÷ 100",{"l":"spp"}],["Augmenter de 25 % · baisser de 20 %","× 1,25 · × 0,80",{"l":"spp"}],["Vitesse","v = d ÷ t · t = d ÷ v · d = v × t",{"l":"spp"}],["Heures décimales","0,25 h = 15 min · 0,5 h = 30 min · 0,75 h = 45 min",{"l":"spp"}],["Aire du disque · périmètre du cercle","π × r² · 2 × π × r",{"l":"spp"}],["Volume d'un pavé","longueur × largeur × hauteur",{"l":"spp"}]]
 };
 
 /* ---------- Fiches ---------- */
@@ -124,7 +182,9 @@ const FICHES = [
 {t:"sr",n:"Secours routier",h:`<h4>Chronologie</h4><ul><li>Protection et balisage → reconnaissance → calage → accès et bilan (maintien tête) → création d'espace → extraction.</li></ul><h4>Sécurité</h4><ul><li>Airbags non déclenchés : 30 / 60 / 90 cm.</li><li>Câbles orange : haute tension, ne jamais couper.</li><li>Neutraliser : contact coupé, clé éloignée, frein de parc.</li></ul><h4>Outils</h4><ul><li>Cisaille (couper), écarteur (écarter), vérin (pousser).</li></ul>`},
 {t:"fdf",n:"Feux de forêt",h:`<h4>Anatomie</h4><ul><li>Tête, flancs, queue, doigts, sautes de feu.</li></ul><h4>Facteurs</h4><ul><li>Météo (vent, hygrométrie, chaleur), relief (pente), végétation.</li></ul><h4>Engagement</h4><ul><li>Partir d'un point d'appui, attaquer de flanc, toujours un itinéraire de repli.</li><li>Autoprotection du CCF si le front arrive.</li><li>GIFF : 4 CCF + chef de groupe.</li></ul><h4>Prévention</h4><ul><li>OLD : 50 m autour des constructions (jusqu'à 100 m par arrêté).</li></ul>`},
 {t:"cult",n:"Organisation et grades",h:`<h4>Grades</h4><ul><li>Sapeur · caporal · caporal-chef</li><li>Sergent · sergent-chef · adjudant · adjudant-chef</li><li>Lieutenant · capitaine · commandant · lieutenant-colonel · colonel</li></ul><h4>Organisation</h4><ul><li>SDIS : établissement public départemental (CASDIS, DDSIS).</li><li>CTA-CODIS : traitement de l'alerte et suivi opérationnel.</li><li>DOS : maire ou préfet · COS : sapeur-pompier.</li><li>BSPP et BMPM : militaires.</li></ul><h4>Repères</h4><ul><li>Sainte-Barbe le 4 décembre · devise « Courage et dévouement ».</li><li>Loi Matras du 25 novembre 2021.</li></ul>`},
-{t:"com",n:"Messages et ordres",l:"av",h:`<h4>Message d'ambiance</h4><ul><li>Dès l'arrivée, court : l'ampleur de l'intervention.</li></ul><h4>Message de renseignements</h4><ul><li>Je suis · je vois · je prévois · je fais · je demande.</li></ul><h4>Ordre initial (SOIEC)</h4><ul><li>Situation · Objectifs · Idée de manœuvre · Exécution · Commandement (+ Logistique).</li></ul>`}
+{t:"com",n:"Messages et ordres",l:"av",h:`<h4>Message d'ambiance</h4><ul><li>Dès l'arrivée, court : l'ampleur de l'intervention.</li></ul><h4>Message de renseignements</h4><ul><li>Je suis · je vois · je prévois · je fais · je demande.</li></ul><h4>Ordre initial (SOIEC)</h4><ul><li>Situation · Objectifs · Idée de manœuvre · Exécution · Commandement (+ Logistique).</li></ul>`},
+{t:"fr",n:"Français : accords et homophones",l:"spp",h:`<h4>Participe passé</h4><ul><li>Avec <b>être</b> : accord avec le sujet (elles sont parties).</li><li>Avec <b>avoir</b> : accord avec le COD seulement s'il est placé avant (les victimes que j'ai secourues ; j'ai secouru les victimes).</li><li>Verbes pronominaux : accord si le pronom est COD (elles se sont blessées).</li></ul><h4>Homophones</h4><div class="tbl"><table><tr><th>Choix</th><th>Astuce</th></tr><tr><td>a / à</td><td>a = avait</td></tr><tr><td>est / et</td><td>est = était</td></tr><tr><td>son / sont</td><td>sont = étaient</td></tr><tr><td>c'est / s'est / ces / ses</td><td>c'est = cela est · s'est + participe · ces = ceux-là · ses = les siens</td></tr><tr><td>ou / où</td><td>ou = ou bien · où = lieu ou moment</td></tr><tr><td>-er / -é</td><td>vendre → -er · vendu → -é</td></tr><tr><td>leur / leurs</td><td>devant un verbe : leur · devant un nom pluriel : leurs</td></tr></table></div><h4>Conjugaison</h4><ul><li>Il faut que + subjonctif : que je sois, que j'aie, que je fasse.</li><li>Si + imparfait → conditionnel : si j'avais, je viendrais.</li><li>Futur (je viendrai) ≠ conditionnel (je viendrais).</li></ul>`},
+{t:"math",n:"Maths : calculs utiles",l:"spp",h:`<h4>Conversions</h4><ul><li>1 m³ = 1 000 L · 1 L = 1 dm³.</li><li>m³/h → L/min : × 1 000 puis ÷ 60.</li><li>1 h = 60 min · 0,5 h = 30 min · 0,25 h = 15 min.</li></ul><h4>Pourcentages</h4><ul><li>x % de N = N × x ÷ 100.</li><li>Augmenter de x % : × (1 + x/100). Baisser de x % : × (1 − x/100).</li><li>Retrouver un prix avant une baisse de 20 % : diviser par 0,8 (et non ajouter 20 %).</li></ul><h4>Débits et autonomie</h4><ul><li>Quantité = débit × durée · autonomie = volume ÷ débit.</li></ul><h4>Vitesse</h4><ul><li>v = d ÷ t · t = d ÷ v · d = v × t (attention aux unités : heures et minutes).</li></ul><h4>Géométrie</h4><div class="tbl"><table><tr><th>Figure</th><th>Périmètre</th><th>Aire</th></tr><tr><td>Rectangle</td><td>2 × (L + l)</td><td>L × l</td></tr><tr><td>Carré</td><td>4 × c</td><td>c × c</td></tr><tr><td>Triangle</td><td>somme des côtés</td><td>base × hauteur ÷ 2</td></tr><tr><td>Cercle</td><td>2 × π × r</td><td>π × r²</td></tr></table></div><ul><li>Volume d'un pavé : L × l × h · d'un cylindre : π × r² × h.</li></ul><h4>Règle de trois</h4><ul><li>Ramener à l'unité, puis multiplier : 3 → 450 €, 1 → 150 €, 5 → 750 €.</li></ul>`}
 ];
 
 /* ---------- Cas pratiques ---------- */

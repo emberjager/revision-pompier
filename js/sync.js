@@ -27,9 +27,9 @@ function mergeData(remote){
   S.fs = fsr; S.days = days; S.ex = ex.slice(-100);
   if(remote.goal) S.goal = remote.goal;
   if(remote.obj) S.obj = remote.obj;
-  if(Array.isArray(remote.themes) && remote.themes.length) S.themes = remote.themes;
+  if(Array.isArray(remote.themes) && remote.themes.length) S.themes = withNewThemes(remote.themes, remote.thk || OLD_TH);
 }
-const payload = () => ({obj:S.obj, themes:S.themes, qp:S.qp, fp:S.fp, cp:S.cp, fs:S.fs, days:S.days, goal:S.goal, ex:S.ex});
+const payload = () => ({obj:S.obj, themes:S.themes, qp:S.qp, fp:S.fp, cp:S.cp, fs:S.fs, days:S.days, goal:S.goal, ex:S.ex, thk:Object.keys(TH)});
 
 let pushTimer = null, applying = false;
 async function push(){
