@@ -14,10 +14,22 @@ function mergeData(remote){
   const cp = {...(remote.cp||{})};
   for(const [id,v] of Object.entries(S.cp)) cp[id] = Math.max(cp[id] ?? 0, v);
   S.qp = qp; S.fp = fp; S.cp = cp;
+  // Cartes en répétition espacée : on garde la carte la plus travaillée.
+  const fsr = {...(remote.fs||{})};
+  for(const [id,v] of Object.entries(S.fs)) if(!fsr[id] || (v.n||0) >= (fsr[id].n||0)) fsr[id] = v;
+  // Activité : pour chaque jour, le plus grand nombre de réponses vu sur un appareil.
+  const days = {...(remote.days||{})};
+  for(const [d,v] of Object.entries(S.days)) days[d] = Math.max(days[d]||0, v);
+  // Examens blancs : réunion par date de passage.
+  const ex = [...(remote.ex||[])]; const seen = new Set(ex.map(e=>e.d));
+  S.ex.forEach(e => { if(!seen.has(e.d)) ex.push(e); });
+  ex.sort((a,b)=>a.d-b.d);
+  S.fs = fsr; S.days = days; S.ex = ex.slice(-100);
+  if(remote.goal) S.goal = remote.goal;
   if(remote.obj) S.obj = remote.obj;
   if(Array.isArray(remote.themes) && remote.themes.length) S.themes = remote.themes;
 }
-const payload = () => ({obj:S.obj, themes:S.themes, qp:S.qp, fp:S.fp, cp:S.cp});
+const payload = () => ({obj:S.obj, themes:S.themes, qp:S.qp, fp:S.fp, cp:S.cp, fs:S.fs, days:S.days, goal:S.goal, ex:S.ex});
 
 let pushTimer = null, applying = false;
 async function push(){
@@ -27,18 +39,22 @@ async function push(){
   if(!error) acct.lastSync = new Date();
   if(route()==="compte") render();
 }
+// Après une remise à zéro, on écrase tout de suite la copie en ligne (sinon la fusion ramènerait les anciens résultats).
+let resetPending = false;
+window.onReset = () => { if(acct.user) resetPending = true; };
 window.onLocalSave = () => {
+  if(resetPending && acct.user){ resetPending = false; clearTimeout(pushTimer); push(); return; }
   if(applying || !acct.user) return;
   clearTimeout(pushTimer); pushTimer = setTimeout(push, 1200);
 };
 async function pull(){
-  if(!SB || !acct.user) return;
+  if(!SB || !acct.user || resetPending) return;
   const {data, error} = await SB.from("progress").select("data").eq("user_id", acct.user.id).maybeSingle();
   if(error){ acct.status = "Échec de la récupération : " + error.message; render(); return; }
   applying = true; mergeData(data && data.data); save(); applying = false;
   renderObj();
   // On ne redessine pas pendant un quiz ou un paquet en cours, pour ne pas couper l'utilisateur.
-  if(!quiz && !deck && !casRun) render();
+  if(!quiz && !deck && !casRun && !(exam && !exam.done)) render();
   await push();
 }
 async function loadProfile(){
