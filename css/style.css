@@ -177,3 +177,16 @@ a.btn{text-decoration:none;display:inline-block}
 .ex-row b.num{font-size:1.1rem}
 .chip:disabled{opacity:.4;cursor:not-allowed}
 .errlist li p.muted{color:var(--muted);font-weight:400}
+
+/* Explications détaillées */
+.explain{display:grid;gap:6px}
+.explain b{margin-bottom:0}
+.explain .ans{margin:0;font-weight:600;color:var(--bad)}
+.explain .ans.ok{color:var(--ok)}
+.why{margin:0}
+.why .label{display:block;margin-bottom:2px}
+.src{margin:0;font-size:.82rem;color:var(--muted);font-style:italic}
+.errlist li p.why{color:var(--ink,inherit);font-weight:400}
+.errlist li p.src{color:var(--muted);font-weight:400}
+.fiche.corr summary{padding:12px 14px;font-weight:600}
+.fiche.corr .errlist{padding:0 14px 14px}

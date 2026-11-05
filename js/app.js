@@ -196,7 +196,7 @@ function startQuiz(themes, n, mode){
 }
 function vQcm(){
   if(!quiz) return `
-    <section style="display:grid;gap:8px"><span class="label">QCM · ${LV[S.obj]}</span><h2>Lancer un quiz</h2><p class="lead">Choisis les thèmes, le nombre de questions et les questions à travailler. Correction et explication après chaque réponse.</p></section>
+    <section style="display:grid;gap:8px"><span class="label">QCM · ${LV[S.obj]}</span><h2>Lancer un quiz</h2><p class="lead">Choisis les thèmes, le nombre de questions et les questions à travailler. Correction et explication après chaque réponse, juste ou fausse, puis correction détaillée à la fin.</p></section>
     <div class="panel">
       <span class="label">Thèmes</span>${themeChips()}
       <span class="label">Nombre de questions</span>
@@ -214,7 +214,7 @@ function vQcm(){
       <p class="lead">${pct>=80?"Solide. Passe à un autre thème ou augmente le nombre de questions.":pct>=50?"Bonne base. Reprends tes erreurs pour consolider.":"Ces notions sont à retravailler : relis la fiche du thème puis refais le quiz."}</p>
       <div class="row"><button type="button" class="btn primary" id="qagain">Nouveau quiz</button>${quiz.wrong.length?`<button type="button" class="btn" id="qerr">Refaire mes erreurs</button>`:""}</div>
     </section>
-    ${quiz.wrong.length?`<section style="display:grid;gap:10px"><h3>À retenir</h3><ul class="errlist">${quiz.wrong.map(q=>`<li><p>${badge(q.t)} ${q.q}</p><p>${q.o[0]}</p></li>`).join("")}</ul></section>`:""}`;
+    ${quiz.log&&quiz.log.length?corrList(quiz.log,"Correction détaillée"):""}`;
   }
   const it = quiz.items[quiz.i], q = it.q, n = quiz.items.length, done = quiz.picked!==null;
   const opts = it.order.map((oi,k) => {
@@ -228,15 +228,34 @@ function vQcm(){
     <div class="progress"><i style="width:${100*(quiz.i+(done?1:0))/n}%"></i></div>
     <p class="question">${q.q}</p>
     <div class="opts">${opts}</div>
-    ${done?`<div class="explain ${good?"":"no"}"><b>${good?"Bonne réponse":"Réponse attendue : "+q.o[0]}</b>${q.e||""}</div>
+    ${done?`<div class="explain ${good?"":"no"}" role="status"><b>${good?"✓ Bonne réponse":"✗ Mauvaise réponse"}</b>${good?"":`<p class="ans">Ta réponse : ${q.o[quiz.picked]}</p><p class="ans ok">Bonne réponse : ${q.o[0]}</p>`}${explainBody(q)}</div>
     <div class="row"><button type="button" class="btn primary" id="qnext">${quiz.i+1<n?"Question suivante":"Voir le résultat"}</button><span class="muted" style="font-size:.85rem">Touche Entrée</span></div>`:`<p class="muted" style="font-size:.85rem">Touches 1 à 4 pour répondre.</p>`}
     <div><button type="button" class="btn" id="qstop">Arrêter le quiz</button></div>
+  </section>`;
+}
+/* Explication : texte + source (dernière parenthèse si c'est une référence) */
+function splitE(e){
+  e = e||""; const m = e.match(/^([\s\S]*?)\s*\(([^()]+)\)\s*$/);
+  if(m && /\b(GTO|GDO|GODR|GNR|SDIS|PSE|RNMSC|SSUAP|guide|référentiel|arrêté|code|loi|décret)\b|\d{4}/i.test(m[2])) return {txt:m[1], src:m[2]};
+  return {txt:e, src:""};
+}
+function explainBody(q){
+  const {txt,src} = splitE(q.e);
+  return (txt?`<p class="why"><span class="label">Pourquoi</span>${txt}</p>`:"") + (src?`<p class="src">Source : ${src}</p>`:"");
+}
+/* Correction détaillée : erreurs d'abord, bonnes réponses repliées */
+function corrList(items, title){
+  const bad = items.filter(it=>it.a!==0), good = items.filter(it=>it.a===0);
+  const li = it => `<li><p>${badge(it.q.t)} ${it.q.q}</p>${it.a===0?"":`<p class="yours">${it.a===null||it.a===undefined?"Sans réponse":"Ta réponse : "+it.q.o[it.a]}</p>`}<p>${it.a===0?"✓ ":""}${it.q.o[0]}</p>${explainBody(it.q)}</li>`;
+  return `<section style="display:grid;gap:10px"><h3>${title}</h3>
+    ${bad.length?`<p class="muted">${bad.length} erreur${bad.length>1?"s":""} à retenir :</p><ul class="errlist">${bad.map(li).join("")}</ul>`:`<p class="muted">Aucune erreur.</p>`}
+    ${good.length?`<details class="fiche corr"><summary>Revoir les ${good.length} bonne${good.length>1?"s":""} réponse${good.length>1?"s":""} et leur explication</summary><ul class="errlist">${good.map(li).join("")}</ul></details>`:""}
   </section>`;
 }
 function pick(oi){
   if(!quiz||quiz.picked!==null||quiz.i>=quiz.items.length) return;
   const q = quiz.items[quiz.i].q; quiz.picked = oi;
-  const ok = oi===0; recordQ(q, ok); save();
+  const ok = oi===0; recordQ(q, ok); save(); (quiz.log=quiz.log||[]).push({q, a:oi});
   if(ok) quiz.score++; else quiz.wrong.push(q);
   render();
 }
@@ -333,7 +352,7 @@ function vCas(){
     <div class="scene">${st.s}</div>
     <p class="question">${st.q}</p>
     <div class="opts">${casRun.order.map((oi,k)=>{ let cls="opt"; if(done){ if(oi===0) cls+=" right"; else if(oi===casRun.picked) cls+=" wrong"; } return `<button type="button" class="${cls}" data-oi="${oi}" ${done?"disabled":""}><kbd>${k+1}</kbd><span>${st.o[oi]}</span></button>`; }).join("")}</div>
-    ${done?`<div class="explain ${casRun.picked===0?"":"no"}"><b>${casRun.picked===0?"Bonne décision":"Conduite attendue : "+st.o[0]}</b>${st.e}</div><div><button type="button" class="btn primary" id="cas-next">${casRun.i+1<c.steps.length?"Étape suivante":"Voir le bilan"}</button></div>`:""}
+    ${done?`<div class="explain ${casRun.picked===0?"":"no"}"><b>${casRun.picked===0?"Bonne décision":"Conduite attendue : "+st.o[0]}</b>${explainBody(st)}</div><div><button type="button" class="btn primary" id="cas-next">${casRun.i+1<c.steps.length?"Étape suivante":"Voir le bilan"}</button></div>`:""}
     <div><button type="button" class="btn" id="cas-back">Quitter le cas</button></div>
   </section>`;
 }
@@ -420,7 +439,7 @@ function vExamen(){
       <p class="muted" style="font-size:.9rem">Les questions ratées reviendront dans tes révisions du jour.</p>
       <div class="row"><button type="button" class="btn primary" id="exnew">Nouvel examen</button><a class="btn" href="#accueil">Tableau de bord</a></div>
     </section>
-    ${miss.length?`<section style="display:grid;gap:10px"><h3>Correction (${miss.length} question${miss.length>1?"s":""} à revoir)</h3><ul class="errlist">${miss.map(it=>`<li><p>${badge(it.q.t)} ${it.q.q}</p><p class="yours">${it.a===null?"Sans réponse":"Ta réponse : "+it.q.o[it.a]}</p><p>${it.q.o[0]}</p>${it.q.e?`<p class="muted">${it.q.e}</p>`:""}</li>`).join("")}</ul></section>`:""}`;
+    ${corrList(exam.items,"Correction")}`;
   }
   const it = exam.items[exam.i], q = it.q;
   const answered = exam.items.filter(x=>x.a!==null).length;
