@@ -40,7 +40,7 @@ Légende : ☐ à faire · ◐ en cours · ☑ fait · 🎨 choix visuel à vali
 - ☑ **N4. Points faibles** : jusqu'à 6 thèmes ou référentiels sous 80 % de bonnes réponses (au moins 5 réponses). « Travailler ça » lance 10 questions en commençant par les plus ratées (mode « points faibles », aussi dans le QCM).
 - ☑ **N5. Courbe des examens blancs** : notes sur 20 des 20 derniers examens, ligne pointillée à 10, note au survol ou au toucher. Visible à partir de 2 examens.
 - ☑ **N6. Plan semaine par semaine** : de cette semaine au concours, 2 thèmes prioritaires par semaine (les plus faibles en premier), nouvelles questions à découvrir, 1 examen blanc par semaine (2 dans les 8 dernières semaines), dernière semaine sans nouvelles questions. Suivi de la semaine en cours (réponses et examens faits). Recalculé à chaque visite.
-- ☐ **N7. Format officiel de l'examen blanc** ❓ : bouton « Format officiel » préréglé. L'utilisateur donnera le nombre de questions, la durée et le barème.
+- ☑ **N7. Format officiel de l'examen blanc** : formats « Maths » (1 h, 25 questions) et « QCM équipier SPV » (thèmes du programme), mention éliminatoire sous 5/20, simulateur de note de concours (coef 1+1+4+4). Source : note de cadrage. Durée et nombre de questions du QCM SPV non précisés dans la note.
 
 ## Phase 4 — Motivation
 - ☑ **M1. Série et objectif du jour plus visibles** (fait le 2026-11-07) : pastille flamme + série dans l'en-tête sur toutes les pages, barre jaune = objectif du jour ; record de série sur l'accueil ; message « Objectif du jour atteint ! » une fois par jour. Sur téléphone, le bouton clair/sombre de l'en-tête est retiré (il reste dans Réglages > Affichage).
@@ -50,7 +50,7 @@ Légende : ☐ à faire · ◐ en cours · ☑ fait · 🎨 choix visuel à vali
 
 ## Phase 5 — Contenu
 - ☑ **C1. Préparation à l'oral** : page #oral (2026-11-07). 43 questions de jury en 7 catégories avec méthode de réponse, chrono préparation + exposé (pause hors écran), grille d'auto-évaluation sur 5 critères (note /20), historique synchronisé (S.oral, S.oralT).
-- ⏸ **C2. Sport** ❓ (bloqué : barèmes à fournir) : carnet de performances et calcul de la note. Les barèmes officiels sont à fournir par l'utilisateur (dossier `cours/sport`).
+- ☑ **C2. Sport** : page Sport (carnet, notes natation / parcours / Luc Léger, note physique, records, barèmes H/F). Source : arrêté du 30 novembre 2020. Oral : mode « entretien officiel » 15 min (5 + 10).
 - ☑ **C3. Vrai/faux et textes à trous** : choix « Format des questions » dans le QCM (QCM, vrai/faux, à compléter, mélange). Le texte à trous ne porte que sur les réponses chiffrées ; bouton « J'avais juste (mal tapé) ».
 - ⏸ **C4. Fiches plus riches** (en attente du retour de l'utilisateur) : schémas, tableaux, lien « questions associées ». Les fiches et cartes ne sont pas encore testées par l'utilisateur : ne pas les refondre avant son retour.
 - ☑ **C5. Suite des lots de questions** : lot 9 (2026-11-07) : SUAP 104, FDF 110, SR 117, 639 au total. À poursuivre : com, cult, fr, math, et OCR du GTO périlleux/montagne.
@@ -76,3 +76,4 @@ Légende : ☐ à faire · ◐ en cours · ☑ fait · 🎨 choix visuel à vali
 - ☑ Phase 1 Ergonomie (E1 à E8), 2026-11-07, service worker rsp-v18.
 - ☑ Phase 2 Fonctions quiz (Q1 à Q7), 2026-11-07, service worker rsp-v19.
 - ☑ Phase 3 Suivi du niveau (N1 à N6), 2026-11-07, service worker rsp-v20. N7 attend le format officiel.
+- ☑ Phase 6 Sport (C2) et format officiel (N7), 2026-11-07, service worker rsp-v23.

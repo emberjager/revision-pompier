@@ -26,7 +26,9 @@ const S = {
   sd: LS.get("sd",{}),    // mort subite : clé de thèmes -> record
   lb: LS.get("lb",0),     // classement du CIS : date d'inscription (> 0) ou de départ (< 0)
   oral: LS.get("oral",[]), // oraux d'entraînement : [{at, k, q, sc:[5 notes sur 4], note, dur}]
-  oralT: LS.get("oralT",null), // durées du chrono de l'oral {prep, talk} en minutes
+  oralT: LS.get("oralT",null), // durées du chrono de l'oral {prep, talk} en minutes, ou {off:true} = entretien officiel
+  sport: LS.get("sport",[]), // séances de sport : [{at, nat (s), pe (étapes 0-5), pd (distances étape 6), lp, ls (Luc Léger palier + s), del?}]
+  sportSex: LS.get("sportSex",""), // barème : "H" ou "F"
   mine: LS.get("mine",{}), // mes questions : id -> {t, q, o, e, src, at, del?}
   mineT: LS.get("mineT","suap"), // dernier thème choisi pour une nouvelle question
   rep: LS.get("rep",[])   // signalements (gardés sur l'appareil seulement) : [{id, t, q, kind, note, at}]
@@ -36,7 +38,7 @@ const isFav = id => (S.fav[id]||0) > 0;
 const OLD_TH = ["suap","inc","div","sr","fdf","cult","com"];
 const withNewThemes = (themes, known) => [...themes, ...Object.keys(TH).filter(t => !known.includes(t) && !themes.includes(t))];
 S.themes = withNewThemes(S.themes, LS.get("thk", OLD_TH)); LS.set("thk", Object.keys(TH));
-const KEYS = ["obj","themes","qp","fp","cp","fs","days","goal","ex","qcm","presets","last","concours","fav","sd","rep","lb","mine","mineT","oral","oralT"];
+const KEYS = ["obj","themes","qp","fp","cp","fs","days","goal","ex","qcm","presets","last","concours","fav","sd","rep","lb","mine","mineT","oral","oralT","sport","sportSex"];
 const save = () => { KEYS.forEach(k => LS.set(k, S[k])); if (window.onLocalSave) window.onLocalSave(); motivCheck(); renderStreak(); };
 
 /* ---------- Répétition espacée et activité du jour ----------
@@ -111,7 +113,7 @@ $("#obj").addEventListener("click", e => {
   const b = e.target.closest("button[data-obj]"); if(!b) return;
   S.obj = b.dataset.obj; save(); renderObj(); quiz=null; deck=null; casRun=null; render();
 });
-const ROUTES = {accueil:"Accueil", niveau:"Mon niveau", qcm:"QCM", cartes:"Cartes", fiches:"Fiches", cas:"Cas pratiques", examen:"Examen blanc", oral:"Oral", reglages:"Réglages", signalements:"Mes signalements"};
+const ROUTES = {accueil:"Accueil", niveau:"Mon niveau", qcm:"QCM", cartes:"Cartes", fiches:"Fiches", cas:"Cas pratiques", examen:"Examen blanc", oral:"Oral", sport:"Sport", reglages:"Réglages", signalements:"Mes signalements"};
 function route(){ const h=location.hash.slice(1); return ROUTES[h]?h:"accueil"; }
 const go = r => { if(route()===r) render(); else location.hash = r; };
 /* Navigation : onglets en haut sur PC ; sur téléphone, barre flottante en bas + bouton rond « Lancer » */
@@ -557,10 +559,11 @@ function bindRemind(){
 }
 
 /* ---------- Oral : question de jury, chrono, méthode, auto-évaluation ---------- */
-// Pas de durée officielle codée en dur : le candidat règle le chrono d'après le règlement de son concours.
+// Mode « entretien officiel » d'après la note de cadrage : 15 min sans préparation, dont une présentation de 5 min au plus, puis environ 10 min de questions.
+// Mode libre : le candidat règle lui-même le chrono.
 const ORAL = {
   pres:{n:"Ma présentation", q:["Présentez-vous au jury.","Résumez votre parcours en quelques minutes.","Qu'est-ce qui, dans votre parcours, vous prépare au métier de sapeur-pompier professionnel ?","Quelles sont vos qualités et vos points à améliorer ?"],
-    m:"Plan annoncé dès la première phrase : qui tu es, ton parcours (études, emplois, engagement SPV, formations), tes points forts avec un exemple chacun, ton projet. Regarde le jury, ne récite pas un texte appris par cœur, finis à l'heure."},
+    m:"Au concours : 5 minutes au plus, sans être interrompu, sans aucun document. Prépare-la et mémorise-la à l'avance, à partir de ta fiche de renseignements. Annonce ton plan dès la première phrase : qui tu es, ton parcours (études, emplois, engagement SPV, formations), les compétences acquises avec un exemple chacune, ta motivation pour le grade de caporal. Dépasse la simple liste chronologique. Dis-la naturellement en regardant le jury, et finis avant 5 minutes : un exposé coupé par le jury et resté inachevé est pénalisé. Reste cohérent avec ta fiche individuelle, que le jury a lue (note de cadrage indicative, concours externe de caporal de SPP)."},
   motiv:{n:"Motivation et parcours", q:["Pourquoi voulez-vous devenir sapeur-pompier professionnel ?","Qu'est-ce que votre engagement de volontaire vous a apporté ?","Pourquoi passer professionnel plutôt que rester volontaire ?","Racontez une intervention qui vous a marqué et ce que vous en avez retiré.","Où vous voyez-vous dans dix ans ?","Seriez-vous prêt à être affecté loin de chez vous ?","Que faites-vous si vous n'êtes pas reçu cette année ?"],
     m:"Fil conducteur : le déclic, ton engagement, ce que tu as appris, pourquoi maintenant, ce que tu apportes. Appuie-toi sur des faits vécus (sans nom ni détail médical de victime). Termine sur ton projet."},
   metier:{n:"Le métier et les missions", q:["Quelles sont les missions des services d'incendie et de secours ?","Quel est le rôle d'un caporal ?","Quelle différence faites-vous entre un équipier et un chef d'équipe ?","Comment voyez-vous l'évolution du secours d'urgence aux personnes ?","Quelles sont les spécificités des feux de forêt dans le Var ?","Que pensez-vous de la place des volontaires dans le modèle français ?","Comment se déroule une garde dans votre centre ?"],
@@ -576,10 +579,15 @@ const ORAL = {
 };
 const ORAL_CRIT = [["Structure","plan annoncé, idées dans l'ordre, conclusion"],["Clarté","voix, débit, vocabulaire, pas de tics"],["Connaissances","réponses justes, exemples précis"],["Posture","regard, attitude, gestion du stress"],["Temps","durée respectée, ni trop court ni trop long"]];
 const ORAL_LV = ["","Insuffisant","À travailler","Bien","Très bien"];
-const oral = {cat:"all", q:null, k:null, phase:null, end:0, left:0, timer:null, sc:[0,0,0,0,0], note:"", saved:false};
-const oralDur = () => ({prep:0, talk:5, ...(S.oralT||{})});
+const ORAL_OFF_Q = "Présentez-vous au jury : votre parcours, votre expérience et les compétences acquises, votre motivation pour devenir caporal.";
+const oral = {jq:[], cat:"all", q:null, k:null, phase:null, end:0, left:0, timer:null, sc:[0,0,0,0,0], note:"", saved:false};
+const oralDur = () => S.oralT && S.oralT.off ? {prep:5, talk:10, off:true} : ({prep:0, talk:5, ...(S.oralT||{}), off:false});
 const mmss = ms => { const s = Math.max(0, Math.ceil(ms/1000)); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); };
 function oralDraw(){
+  if(oralDur().off){
+    const jq = shuffle(Object.keys(ORAL).filter(k=>k!=="pres").flatMap(k => ORAL[k].q)).slice(0,4);
+    oralStop(); Object.assign(oral, {k:"pres", q:ORAL_OFF_Q, jq, phase:null, left:0, sc:[0,0,0,0,0], note:"", saved:false}); return;
+  }
   const cats = oral.cat==="all" ? Object.keys(ORAL) : [oral.cat];
   const pool = cats.flatMap(k => ORAL[k].q.map(q => [k,q])).filter(([,q]) => q !== oral.q);
   const [k,q] = pool[Math.floor(Math.random()*pool.length)];
@@ -601,7 +609,7 @@ function oralTick(){
     oral.phase = "done"; oral.left = 0; try{ navigator.vibrate && navigator.vibrate([300,150,300]); }catch(e){} render(); return;
   }
   el.textContent = mmss(left); const b = $("#ochrbar"); if(b) b.style.width = (100*left/tot)+"%";
-  el.classList.toggle("warn", oral.phase==="talk" && left < 30000);
+  el.classList.toggle("warn", (oral.phase==="talk" || d.off) && left < 30000);
 }
 function oralStats(){
   const h = S.oral||[]; if(!h.length) return "";
@@ -620,21 +628,25 @@ function vOral(){
   return `<section style="display:grid;gap:8px"><span class="label">Concours SPP</span><h2>Oral</h2>
     <p class="lead">Tire une question de jury, prépare-toi, réponds à voix haute avec le chrono, puis note-toi honnêtement. Idéal à deux : un collègue joue le jury.</p></section>
   <div class="panel">
+    <span class="label">Format</span>
+    <div class="chips" id="ofmt"><button type="button" class="chip" data-o="1" aria-pressed="${d.off}">Entretien officiel (15 min)</button><button type="button" class="chip" data-o="0" aria-pressed="${!d.off}">Libre</button></div>
+    ${d.off ? `<p class="muted" style="font-size:.9rem;margin:0">Comme au concours : pas de préparation ni de document. Présentation de 5 min au plus (à 5 min, le chrono passe seul aux questions), puis environ 10 min de questions et de mises en situation. Idéal avec un collègue qui joue le jury. (Note de cadrage indicative, concours externe de caporal de SPP)</p>` : `
     <span class="label">Type de question</span>
     <div class="chips" id="ocat"><button type="button" class="chip" data-c="all" aria-pressed="${oral.cat==="all"}">Toutes</button>${Object.entries(ORAL).map(([k,v])=>`<button type="button" class="chip" data-c="${k}" aria-pressed="${oral.cat===k}">${v.n}</button>`).join("")}</div>
     <span class="label">Chrono (règle-le d'après le règlement de ton concours)</span>
     <div class="ochips"><span>Préparation</span><div class="chips" id="oprep">${[0,2,5,10,15,20].map(m=>`<button type="button" class="chip" data-m="${m}" aria-pressed="${d.prep===m}">${m?m+" min":"aucune"}</button>`).join("")}</div></div>
-    <div class="ochips"><span>Réponse</span><div class="chips" id="otalk">${[1,2,3,5,10,15,20].map(m=>`<button type="button" class="chip" data-m="${m}" aria-pressed="${d.talk===m}">${m} min</button>`).join("")}</div></div>
-    <div><button type="button" class="btn primary" id="odraw">${oral.q ? "Autre question" : "Tirer une question"}</button></div>
+    <div class="ochips"><span>Réponse</span><div class="chips" id="otalk">${[1,2,3,5,10,15,20].map(m=>`<button type="button" class="chip" data-m="${m}" aria-pressed="${d.talk===m}">${m} min</button>`).join("")}</div></div>`}
+    <div><button type="button" class="btn primary" id="odraw">${d.off ? (oral.q ? "Recommencer l'entretien" : "Commencer l'entretien") : oral.q ? "Autre question" : "Tirer une question"}</button></div>
   </div>
   ${oral.q ? `<section class="panel oq">
     <span class="label">${c.n}</span>
     <p class="oq-q">${esc(oral.q)}</p>
-    <div class="ochr"><span class="label">${oral.phase==="prep" ? "Préparation" : oral.phase==="done" ? "Temps écoulé" : "Réponse"}</span>
+    <div class="ochr"><span class="label">${oral.phase==="done" ? "Temps écoulé" : d.off ? (oral.phase==="talk" ? "Questions du jury" : "Présentation · 5 min au plus") : oral.phase==="prep" ? "Préparation" : "Réponse"}</span>
       <b class="num ${oral.phase==="done"?"warn":""}" id="ochr">${mmss(left)}</b>
       <div class="bar"><i id="ochrbar" style="width:${oral.phase ? 100*Math.max(0,left)/tot : 100}%"></i></div></div>
     <div class="row">${run ? `<button type="button" class="btn primary" id="opause">Pause</button>` : `<button type="button" class="btn primary" id="ostart">${oral.phase && oral.phase!=="done" ? "Reprendre" : oral.phase==="done" ? "Recommencer" : "Démarrer"}</button>`}
-      ${oral.phase==="prep" ? `<button type="button" class="btn" id="oskip">Passer à la réponse</button>` : ""}${oral.phase && oral.phase!=="done" ? `<button type="button" class="btn" id="oend">J'ai fini</button>` : ""}</div>
+      ${oral.phase==="prep" ? `<button type="button" class="btn" id="oskip">${d.off ? "Présentation finie : questions" : "Passer à la réponse"}</button>` : ""}${oral.phase && oral.phase!=="done" ? `<button type="button" class="btn" id="oend">J'ai fini</button>` : ""}</div>
+    ${d.off && oral.jq.length && oral.phase && oral.phase!=="prep" ? `<div><span class="label">Questions possibles du jury</span><ul style="margin:6px 0 0;padding-left:1.2em;display:grid;gap:4px">${oral.jq.map(q=>`<li>${esc(q)}</li>`).join("")}</ul></div>` : ""}
     <details class="omethod"><summary>Comment structurer ta réponse</summary><p>${c.m}</p></details>
   </section>
   <form class="panel" id="oeval"><h3>Ton auto-évaluation</h3>
@@ -648,6 +660,7 @@ function vOral(){
 }
 function bindOral(){
   const pick = (id, fn) => { const el = $(id); if(el) el.onclick = e => { const b = e.target.closest("button"); if(b) fn(b); }; };
+  pick("#ofmt", b => { const off = b.dataset.o==="1"; if(off===oralDur().off) return; S.oralT = {...(S.oralT||{}), off}; save(); oralStop(); Object.assign(oral, {q:null, k:null, jq:[], phase:null, left:0}); render(); });
   pick("#ocat", b => { oral.cat = b.dataset.c; render(); });
   pick("#oprep", b => { S.oralT = {...oralDur(), prep:+b.dataset.m}; save(); if(!oral.timer && oral.phase!=="talk"){ oral.phase = null; } render(); });
   pick("#otalk", b => { S.oralT = {...oralDur(), talk:+b.dataset.m}; save(); if(!oral.timer){ oral.phase = null; } render(); });
@@ -662,11 +675,135 @@ function bindOral(){
     f.onsubmit = e => {
       e.preventDefault(); if(!oral.sc.every(x=>x>0) || oral.saved) return;
       oral.note = $("#onote").value.trim();
-      (S.oral = S.oral||[]).push({at:Date.now(), k:oral.k, q:oral.q, sc:[...oral.sc], note:oral.note, dur:oralDur().talk});
+      (S.oral = S.oral||[]).push({at:Date.now(), k:oral.k, q:oral.q, sc:[...oral.sc], note:oral.note, dur:oralDur().off ? 15 : oralDur().talk});
       S.oral = S.oral.slice(-100); oral.saved = true; tick(); save(); render(); toast("Oral enregistré : "+oral.sc.reduce((a,b)=>a+b,0)+"/20");
     };
   }
   if(oral.timer) oralTick();
+}
+
+/* ---------- Sport : carnet d'entraînement et notes des épreuves physiques ----------
+   Barèmes de l'arrêté du 30 novembre 2020 (épreuves physiques communes aux concours externes de SPP, dont caporal). */
+const SP_SRC = "Arrêté du 30 novembre 2020";
+// Luc Léger : seuil de chaque note de 0 à 20, en secondes de course (palier × 60 + secondes dans le palier).
+const LL_BAR = {
+  H:[360,390,420,450,480,510,540,570,600,630,660,690,720,735,750,765,780,795,810,825,840],
+  F:[210,240,270,300,330,360,390,420,450,480,510,525,540,555,570,585,600,615,630,645,660]
+};
+const SP_NAT = {H:50, F:60}, SP_PE_T = {H:"4 min", F:"5 min 30"};
+const SP_ETAPES = [
+  "Aller-retour sur 18 m, puis translation à la barre fixe (aller et retour de part et d'autre du repère central)",
+  "Charge de 20 kg dans une main : aller-retour de 18 m en franchissant le banc, changement de main au bout",
+  "Une charge de 20 kg dans chaque main (40 kg) : 10 montées et descentes sur les marches, puis retour",
+  "Charge de 10 kg : toucher alternativement le repère à 1,60 m puis le sol, 10 fois",
+  "Tracter une charge de 40 kg sur 18 m à la corde, la ramener sous le tunnel, puis retour sous le tunnel",
+  "Une charge de 20 kg dans chaque main (40 kg) : allers-retours sur 18 m, 1 point par distance validée (15 au plus)"
+];
+const llFmt = v => { const p = Math.floor(v/60), s = v%60; return p+"P"+(s ? pad(s) : ""); };
+const llNote = (sex, p, s) => { const v = p*60 + (s||0), b = LL_BAR[sex]; let n = 0; b.forEach((t,i) => { if(v >= t) n = i; }); return n; };
+const peNote = (e, d) => e + (e===5 ? Math.min(15, Math.max(0, d||0)) : 0);
+const finNote = (a, b) => Math.floor((a+b)/2*100)/100; // moyenne au centième par défaut
+const natFmt = s => s==null ? "" : (s >= 60 ? Math.floor(s/60)+" min "+pad(Math.round(s%60*10)/10) : String(s).replace(".",",")+" s");
+function natParse(t){
+  t = String(t||"").trim().replace(",", "."); if(!t) return null;
+  const m = t.match(/^(\d+)\s*[:'m]\s*(\d+(?:\.\d+)?)\s*(?:s|")?$/i) || null;
+  const v = m ? (+m[1])*60 + (+m[2]) : (/^\d+(\.\d+)?\s*s?$/i.test(t) ? parseFloat(t) : NaN);
+  return isFinite(v) && v > 0 && v < 600 ? Math.round(v*10)/10 : NaN;
+}
+// Notes d'une séance (null = épreuve non faite).
+function spNotes(x, sex){
+  const r = {nat:null, pe:null, ll:null, fin:null};
+  if(x.nat!=null) r.nat = x.nat <= SP_NAT[sex];
+  if(x.pe!=null) r.pe = peNote(x.pe, x.pd);
+  if(x.lp!=null) r.ll = llNote(sex, x.lp, x.ls);
+  if(r.pe!=null && r.ll!=null) r.fin = finNote(r.pe, r.ll);
+  return r;
+}
+const spList = () => (S.sport||[]).filter(x => x && !x.del).sort((a,b) => b.at-a.at);
+// Dernière note physique complète : sert au simulateur de note de concours.
+function spLastFin(){ const sex = S.sportSex; if(!sex) return null; for(const x of spList()){ const n = spNotes(x, sex); if(n.fin!=null) return n.fin; } return null; }
+let spDraft = {d:"", nat:"", pe:"", pd:"", lp:"", ls:""}, spDel = null;
+function spPreview(){
+  const sex = S.sportSex, d = spDraft, out = [];
+  const nat = natParse(d.nat);
+  if(d.nat!=="") out.push(isNaN(nat) ? `<span class="muted">Natation : temps illisible (ex. 47 ou 0:58)</span>` : `Natation : <b>${nat <= SP_NAT[sex] ? "réussite" : "échec"}</b> (${natFmt(nat)}, limite ${SP_NAT[sex]} s)`);
+  const pe = d.pe==="" ? null : peNote(+d.pe, +d.pd||0);
+  if(pe!=null) out.push(`Parcours : <b class="num">${pe} / 20</b>`);
+  const ll = d.lp==="" ? null : llNote(sex, +d.lp, +d.ls||0);
+  if(ll!=null) out.push(`Luc Léger : <b class="num">${ll} / 20</b> (${llFmt((+d.lp)*60+(+d.ls||0))})`);
+  if(pe!=null && ll!=null) out.push(`Note des épreuves physiques : <b class="num">${noteFr(finNote(pe, ll).toFixed(2))} / 20</b>`);
+  return out.length ? out.map(x=>`<p style="margin:0">${x}</p>`).join("") : `<p class="muted" style="margin:0">Remplis une ou plusieurs épreuves : les notes s'affichent ici.</p>`;
+}
+function spHistory(sex){
+  const L = spList(); if(!L.length) return "";
+  const N = L.map(x => [x, spNotes(x, sex)]);
+  const best = k => { const v = N.map(([,n])=>n[k]).filter(v=>v!=null); return v.length ? Math.max(...v) : null; };
+  const nats = L.filter(x=>x.nat!=null).map(x=>x.nat), bnat = nats.length ? Math.min(...nats) : null;
+  const tiles = [["Natation", bnat!=null ? natFmt(bnat) : "–"], ["Parcours", best("pe")!=null ? best("pe")+" / 20" : "–"], ["Luc Léger", best("ll")!=null ? best("ll")+" / 20" : "–"], ["Note physique", best("fin")!=null ? noteFr(best("fin").toFixed(2))+" / 20" : "–"]];
+  const fins = N.filter(([,n])=>n.fin!=null).slice(0,8);
+  const day = at => new Date(at).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"});
+  return `<section style="display:grid;gap:10px"><h3>Mes records</h3>
+    <div class="row">${tiles.map(([k,v])=>`<div class="panel" style="padding:12px 14px;gap:2px;flex:1 1 140px"><span class="label">${k}</span><b class="num" style="font-size:1.3rem">${v}</b></div>`).join("")}</div>
+    ${fins.length > 1 ? `<h3>Évolution de la note physique</h3><div class="themes">${fins.map(([x,n])=>`<div class="trow ex-row"><div class="name"><div>${day(x.at)}<small>Parcours ${n.pe} · Luc Léger ${n.ll}</small></div></div><div class="bar" title="${noteFr(n.fin.toFixed(2))} / 20"><i style="width:${n.fin*5}%"></i></div><b class="num">${noteFr(n.fin.toFixed(2))}</b></div>`).join("")}</div>` : ""}
+    <h3>Mes séances (${L.length})</h3>
+    <ul class="errlist">${N.slice(0,20).map(([x,n])=>`<li><div class="row" style="justify-content:space-between"><b>${day(x.at)}</b><button type="button" class="btn" data-spdel="${x.at}" style="padding:4px 10px;font-size:.85rem">${spDel===x.at ? "Confirmer la suppression" : "Supprimer"}</button></div>
+      <p class="muted">${[n.nat!=null ? `Natation ${natFmt(x.nat)} : ${n.nat ? "réussite" : "échec"}` : "", n.pe!=null ? `Parcours ${n.pe}/20${x.pe<5 ? ` (arrêt à l'étape ${x.pe+1})` : ""}` : "", n.ll!=null ? `Luc Léger ${llFmt(x.lp*60+(x.ls||0))} : ${n.ll}/20` : ""].filter(Boolean).join(" · ")}${n.fin!=null ? ` · <b>note physique ${noteFr(n.fin.toFixed(2))}</b>` : ""}</p></li>`).join("")}</ul></section>`;
+}
+function spBareme(sex){
+  const b = LL_BAR[sex];
+  return `<details class="panel omethod"><summary>Barèmes officiels (${sex==="H" ? "hommes" : "femmes"})</summary>
+    <p><b>Ordre des épreuves :</b> natation, parcours professionnel adapté, puis Luc Léger, avec au moins une heure de pause entre chaque.</p>
+    <p><b>Natation, 50 m nage libre :</b> réussite en ${SP_NAT[sex]} s au plus, sinon le candidat est déclaré en échec.</p>
+    <p><b>Parcours professionnel adapté :</b> en tenue de sport avec une charge dorsale de 22 kg (dossard d'ARI). Temps imparti : ${SP_PE_T[sex]}. Chaque étape doit être validée pour passer à la suivante. Étapes 1 à 5 : 1 point chacune. Étape 6 : 1 point par distance de 18 m validée, 15 au plus. Total sur 20.</p>
+    <ol style="margin:0;padding-left:1.3em;display:grid;gap:4px">${SP_ETAPES.map(e=>`<li>${e}</li>`).join("")}</ol>
+    <p><b>Luc Léger :</b> navettes de 20 m au rythme de la bande sonore. « 12P30 » = palier 12 et 30 secondes.</p>
+    <div class="tbl"><table style="min-width:0"><thead><tr><th>Note</th><th>Palier</th><th>Note</th><th>Palier</th></tr></thead><tbody>${Array.from({length:11},(_,i)=>{ const a = 20-i, c = 9-i; return `<tr><td class="num">${a}</td><td class="num">${llFmt(b[a])}</td><td class="num">${c>=0 ? c : ""}</td><td class="num">${c>=0 ? llFmt(b[c]) : ""}</td></tr>`; }).join("")}</tbody></table></div>
+    <p><b>Note des épreuves physiques :</b> moyenne du parcours et du Luc Léger, au centième par défaut. Elle compte coefficient 4 dans la note finale du concours.</p>
+    <p class="muted" style="font-size:.85rem">(${SP_SRC})</p></details>`;
+}
+function vSport(){
+  const sex = S.sportSex;
+  const head = `<section style="display:grid;gap:8px"><span class="label">Concours SPP · épreuves physiques</span><h2>Sport</h2>
+    <p class="lead">Note tes séances d'entraînement : l'appli calcule tes notes avec les barèmes officiels du concours et suit tes progrès.</p></section>
+    <div class="panel"><span class="label">Barème à appliquer</span><div class="chips" id="spsex">${[["H","Hommes"],["F","Femmes"]].map(([k,v])=>`<button type="button" class="chip" data-s="${k}" aria-pressed="${sex===k}">${v}</button>`).join("")}</div>
+    ${sex ? "" : `<p class="muted" style="margin:0">Choisis ton barème : les seuils ne sont pas les mêmes pour les hommes et les femmes.</p>`}</div>`;
+  if(!sex) return head;
+  const d = spDraft, today = dayKey(new Date());
+  return head + `<form class="panel" id="spf"><h3>Nouvelle séance</h3>
+    <label class="label" for="spd">Date</label><input class="field" type="date" id="spd" value="${esc(d.d || today)}" max="${today}" style="max-width:200px">
+    <div class="ocrit"><div><b>Natation 50 m</b><small>Temps en secondes ou en min:s (ex. 47 ou 0:58)</small></div><input class="field" id="spn" inputmode="decimal" value="${esc(d.nat)}" placeholder="—" style="width:7em"></div>
+    <div class="ocrit"><div><b>Parcours : étapes validées</b><small>0 à 5 ; à 5, la séance passe à l'étape 6</small></div><select class="field" id="spe" style="width:7em"><option value="">—</option>${[0,1,2,3,4,5].map(v=>`<option ${d.pe!==""&&+d.pe===v?"selected":""}>${v}</option>`).join("")}</select></div>
+    <div class="ocrit"><div><b>Étape 6 : distances de 18 m</b><small>0 à 15, avant la fin des ${SP_PE_T[sex]}</small></div><input class="field" type="number" id="spx" min="0" max="15" value="${esc(d.pd)}" ${d.pe==="5"?"":"disabled"} style="width:7em"></div>
+    <div class="ocrit"><div><b>Luc Léger</b><small>Palier atteint et secondes dans ce palier</small></div><div class="row" style="gap:6px"><input class="field" type="number" id="spp" min="1" max="21" value="${esc(d.lp)}" placeholder="palier" aria-label="Palier" style="width:6em"><input class="field" type="number" id="sps" min="0" max="59" value="${esc(d.ls)}" placeholder="s" aria-label="Secondes" style="width:5em"></div></div>
+    <div class="explain" id="sppre" style="display:grid;gap:4px">${spPreview()}</div>
+    <div><button class="btn primary">Enregistrer la séance</button></div></form>
+  ${spHistory(sex)}
+  ${spBareme(sex)}`;
+}
+function bindSport(){
+  const sx = $("#spsex"); if(sx) sx.onclick = e => { const b = e.target.closest("[data-s]"); if(b){ S.sportSex = b.dataset.s; save(); render(); } };
+  const f = $("#spf"); if(!f) return;
+  const read = () => { spDraft = {d:$("#spd").value, nat:$("#spn").value.trim(), pe:$("#spe").value, pd:$("#spx").value, lp:$("#spp").value, ls:$("#sps").value}; };
+  f.oninput = f.onchange = () => { read(); $("#spx").disabled = spDraft.pe!=="5"; $("#sppre").innerHTML = spPreview(); };
+  f.onsubmit = e => {
+    e.preventDefault(); read();
+    const d = spDraft, nat = natParse(d.nat);
+    if(isNaN(nat)){ toast("Temps de natation illisible : écris par exemple 47 ou 0:58"); return; }
+    const pe = d.pe==="" ? null : +d.pe, lp = d.lp==="" ? null : Math.max(1, Math.min(21, Math.round(+d.lp)));
+    if(nat==null && pe==null && lp==null){ toast("Remplis au moins une épreuve"); return; }
+    const at = (d.d ? new Date(d.d+"T12:00:00").getTime() : Date.now()) + (Date.now()%3600000); // date choisie, heure unique
+    const x = {at, nat, pe, pd:pe===5 ? Math.max(0, Math.min(15, Math.round(+d.pd||0))) : null, lp, ls:lp==null ? null : Math.max(0, Math.min(59, Math.round(+d.ls||0)))};
+    (S.sport = S.sport||[]).push(x); S.sport = S.sport.slice(-200);
+    spDraft = {d:"", nat:"", pe:"", pd:"", lp:"", ls:""};
+    const n = spNotes(x, S.sportSex); tick(); save(); render();
+    toast(n.fin!=null ? "Séance enregistrée : note physique "+noteFr(n.fin.toFixed(2))+" / 20" : "Séance enregistrée");
+  };
+  document.querySelectorAll("[data-spdel]").forEach(b => b.onclick = () => {
+    const at = +b.dataset.spdel;
+    if(spDel!==at){ spDel = at; render(); return; }
+    const x = S.sport.find(y=>y.at===at); if(x){ for(const k of Object.keys(x)) if(k!=="at") delete x[k]; x.del = true; }
+    spDel = null; save(); render(); toast("Séance supprimée");
+  });
 }
 
 /* ---------- Mes questions (ajoutées dans le site, synchronisées avec le compte) ---------- */
@@ -1246,12 +1383,20 @@ function bindCas(){
 /* ---------- Examen blanc ----------
    Questions tirées dans tous les thèmes de l'objectif, chrono, pas de correction avant la fin, note sur 20. */
 let exam = null, exTimer = null;
-let exSetup = {n:20, min:30};
+let exSetup = {n:20, min:30, f:"libre"};
+// Formats d'après la note de cadrage indicative des épreuves du concours externe de caporal de SPP.
+const CADRAGE = "Note de cadrage indicative, concours externe de caporal de SPP";
+const EX_FMT = {
+  libre:{n:"Libre", d:"Questions de tous les thèmes de ton objectif. Choisis le nombre de questions et la durée."},
+  math:{n:"Maths (concours sur diplôme)", q:25, min:60, th:["math"], d:"QCM de mathématiques du concours ouvert aux titulaires d'un diplôme de niveau 3 : 1 h, de 20 à 30 questions à titre indicatif, souvent réparties en 2 ou 3 problèmes. Programme : arithmétique (fractions, règle de trois, partages proportionnels), géométrie (surfaces, volumes), conversions de temps et d'unités, vitesse, masse volumique. La calculatrice est autorisée ou non selon le sujet."},
+  spv:{n:"QCM équipier SPV (concours SPV)", th:["suap","inc","div","sr","fdf","cult"], d:"QCM sur les activités et compétences de l'équipier SPV, pour le concours ouvert aux volontaires : incendie, secours d'urgence aux personnes, opérations diverses, techniques opérationnelles, culture administrative. La note de cadrage ne donne ni la durée ni le nombre de questions de cette épreuve : vérifie-les dans l'arrêté d'ouverture de ton concours."}
+};
+const exPool = () => { const th = EX_FMT[exSetup.f].th; return visQ().filter(q => !th || th.includes(q.t)); };
 const fmtTime = ms => { const s = Math.max(0, Math.ceil(ms/1000)); return pad(Math.floor(s/60))+":"+pad(s%60); };
 const noteFr = n => String(n).replace(".", ",");
 function startExam(){
-  const pool = shuffle(visQ()).slice(0, exSetup.n);
-  exam = {items:pool.map(q=>({q, order:shuffle(q.o.map((_,i)=>i)), a:null})), i:0, start:Date.now(), end:Date.now()+exSetup.min*60000, min:exSetup.min, done:false, confirm:false};
+  const pool = shuffle(exPool()).slice(0, exSetup.n);
+  exam = {f:exSetup.f, items:pool.map(q=>({q, order:shuffle(q.o.map((_,i)=>i)), a:null})), i:0, start:Date.now(), end:Date.now()+exSetup.min*60000, min:exSetup.min, done:false, confirm:false};
   runExamTimer();
 }
 function runExamTimer(){
@@ -1272,7 +1417,7 @@ function finishExam(timeout){
   exam.used = Math.min(Date.now(), exam.end) - exam.start;
   exam.note = Math.round(ok*20/n*10)/10; exam.ok = ok;
   exam.items.forEach(it => { if(it.a!==null) recordQ(it.q, it.a===0); });
-  S.ex.push({d:Date.now(), n, ok, note:exam.note, min:exam.min, used:Math.round(exam.used/1000)});
+  S.ex.push({d:Date.now(), n, ok, note:exam.note, min:exam.min, used:Math.round(exam.used/1000), ...(exam.f && exam.f!=="libre" ? {f:exam.f} : {})});
   if(S.ex.length > 100) S.ex = S.ex.slice(-100);
   save();
   if(route()==="examen") render();
@@ -1285,22 +1430,71 @@ function exHistory(){
   const best = Math.max(...S.ex.map(e=>e.note));
   return `<section style="display:grid;gap:10px"><h3>Mes examens blancs</h3>
     <p class="muted">Meilleure note : <b class="num">${noteFr(best)} / 20</b> · ${S.ex.length} examen${S.ex.length>1?"s":""} passé${S.ex.length>1?"s":""}</p>
-    <div class="themes">${last.map(e => `<div class="trow ex-row"><div class="name"><div>${new Date(e.d).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"})}<small>${e.ok} / ${e.n} bonnes réponses · ${Math.round(e.used/60)} min sur ${e.min}</small></div></div><div class="bar" title="${noteFr(e.note)} / 20"><i style="width:${e.note*5}%"></i></div><b class="num">${noteFr(e.note)}</b></div>`).join("")}</div></section>`;
+    <div class="themes">${last.map(e => `<div class="trow ex-row"><div class="name"><div>${new Date(e.d).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"})}<small>${e.f && EX_FMT[e.f] ? EX_FMT[e.f].n+" · " : ""}${e.ok} / ${e.n} bonnes réponses · ${Math.round(e.used/60)} min sur ${e.min}${e.note<5 ? " · éliminatoire" : ""}</small></div></div><div class="bar" title="${noteFr(e.note)} / 20"><i style="width:${e.note*5}%"></i></div><b class="num">${noteFr(e.note)}</b></div>`).join("")}</div></section>`;
+}
+/* Simulateur de note de concours : écrits coef 1 + 1, épreuves physiques coef 4, entretien coef 4 (note de cadrage). */
+let sim = null;
+function simInit(){
+  if(sim) return;
+  const o = (S.oral||[]).slice(-1)[0], sp = typeof spLastFin==="function" ? spLastFin() : null;
+  sim = {e1:"", e2:"", sp:sp!=null ? String(sp).replace(".",",") : "", or:o ? String(o.sc.reduce((a,b)=>a+b,0)) : ""};
+}
+const simNum = v => { const x = parseFloat(String(v).replace(",", ".")); return isFinite(x) && x >= 0 && x <= 20 ? x : null; };
+function simResult(){
+  const e1 = simNum(sim.e1), e2 = simNum(sim.e2), sp = simNum(sim.sp), or = simNum(sim.or), out = []; let elim = false;
+  const bad = t => `<p style="margin:0;color:var(--bad)"><b>✗</b> ${t}</p>`, ok = t => `<p style="margin:0;color:var(--ok)"><b>✓</b> ${t}</p>`;
+  if(e1!=null && e2!=null){
+    const m = (e1+e2)/2;
+    if(e1 < 5 || e2 < 5){ elim = true; } if(e1 < 5 || e2 < 5) out.push(bad("Éliminé : note inférieure à 5 / 20 à une épreuve écrite."));
+    else if(m < 10 && (elim = true)) out.push(bad(`Moyenne des écrits ${noteFr(m.toFixed(2))} / 20 : sous 10, pas d'admissibilité (le seuil fixé par le jury ne peut pas être inférieur à 10).`));
+    else out.push(ok(`Moyenne des écrits ${noteFr(m.toFixed(2))} / 20 : au-dessus du minimum de 10. L'admissibilité dépend du seuil fixé par le jury.`));
+  }
+  if(or!=null && or < 5 && (elim = true)) out.push(bad("Éliminé : note inférieure à 5 / 20 à l'entretien."));
+  if([e1,e2,sp,or].every(v=>v!=null)){
+    const t = Math.floor((e1+e2+4*sp+4*or)/10*100)/100;
+    out.push(`<p style="margin:0">Note finale : <b class="num" style="font-size:1.3rem">${noteFr(t.toFixed(2))} / 20</b> <span class="muted">(écrits × 1 + physique × 4 + entretien × 4) ÷ 10</span></p>`);
+    out.push(elim ? `<p class="muted" style="margin:0">Calcul indicatif : avec une élimination ci-dessus, cette note ne compterait pas.</p>` : t < 10 ? bad("Moyenne générale sous 10 / 20 : éliminatoire.") : ok("Moyenne générale d'au moins 10 / 20. Le classement final dépend des autres candidats et du jury."));
+  } else out.push(`<p class="muted" style="margin:0">Remplis les quatre notes pour voir ta note finale.</p>`);
+  return out.join("");
+}
+function simHtml(){
+  simInit();
+  const f = (id, k, lab, hint) => `<div class="ocrit"><div><b>${lab}</b><small>${hint}</small></div><input class="field" id="${id}" inputmode="decimal" value="${esc(sim[k])}" placeholder="/ 20" style="width:6em"></div>`;
+  return `<details class="panel omethod" id="simbox" ${sim.open?"open":""}><summary>Simuler ma note de concours</summary>
+    <form id="simf" style="display:grid;gap:4px;margin-top:8px" onsubmit="return false">
+      ${f("sim1","e1","Écrit 1 · étude de texte","QCM, coefficient 1")}
+      ${f("sim2","e2","Écrit 2 · maths ou QCM équipier SPV","Selon ton concours, coefficient 1")}
+      ${f("sim3","sp","Épreuves physiques","Coefficient 4 · ta dernière note de la page Sport")}
+      ${f("sim4","or","Entretien avec le jury","Coefficient 4 · ta dernière auto-évaluation à l'oral")}
+    </form>
+    <div class="explain" id="simres" style="display:grid;gap:6px">${simResult()}</div>
+    <p class="muted" style="font-size:.85rem;margin:0">Simulation indicative. (${CADRAGE})</p></details>`;
+}
+function bindSim(){
+  const box = $("#simbox"); if(!box) return;
+  box.ontoggle = () => { sim.open = box.open; };
+  $("#simf").oninput = () => { sim.e1 = $("#sim1").value; sim.e2 = $("#sim2").value; sim.sp = $("#sim3").value; sim.or = $("#sim4").value; $("#simres").innerHTML = simResult(); };
 }
 function vExamen(){
-  const avail = visQ().length;
+  const avail = exPool().length, F = EX_FMT[exSetup.f];
+  if(exSetup.n > avail && avail) exSetup.n = [20,25,30,40,60].filter(n=>n<=avail).pop() || exSetup.n;
   if(!exam) return `
     <section style="display:grid;gap:8px"><span class="label">Examen blanc · ${LV[S.obj]}</span><h2>Examen blanc</h2>
-    <p class="lead">Conditions d'épreuve : questions tirées au hasard dans tous les thèmes, chrono, aucune correction avant de rendre la copie. Note sur 20, sans points négatifs. Tu peux revenir sur une question tant que tu n'as pas rendu.</p></section>
+    <p class="lead">Conditions d'épreuve : questions tirées au hasard, chrono, aucune correction avant de rendre la copie. Note sur 20, sans points négatifs. Tu peux revenir sur une question tant que tu n'as pas rendu.</p>
+    <p class="muted" style="font-size:.9rem">Au concours, chaque épreuve écrite dure 1 h et compte coefficient 1. Une note sous 5 / 20 à une épreuve écrite est éliminatoire. Une question peut y avoir une ou plusieurs bonnes réponses, et le barème (points retirés éventuels) est écrit sur le sujet ; ici, chaque question a une seule bonne réponse. (${CADRAGE})</p></section>
     <div class="panel">
+      <span class="label">Format</span>
+      <div class="chips" id="exf">${Object.entries(EX_FMT).map(([k,v])=>`<button type="button" class="chip" data-f="${k}" aria-pressed="${exSetup.f===k}">${v.n}</button>`).join("")}</div>
+      <p class="muted" style="font-size:.9rem;margin:0">${F.d}</p>
       <span class="label">Nombre de questions</span>
-      <div class="chips" id="exn">${[20,40,60].map(n=>`<button type="button" class="chip" data-n="${n}" aria-pressed="${exSetup.n===n}" ${n>avail?"disabled":""}>${n}</button>`).join("")}</div>
+      <div class="chips" id="exn">${[20,25,30,40,60].map(n=>`<button type="button" class="chip" data-n="${n}" aria-pressed="${exSetup.n===n}" ${n>avail?"disabled":""}>${n}</button>`).join("")}</div>
       <span class="label">Durée</span>
       <div class="chips" id="exm">${[15,30,45,60].map(m=>`<button type="button" class="chip" data-m="${m}" aria-pressed="${exSetup.min===m}">${m} min</button>`).join("")}</div>
-      <p class="muted" style="font-size:.9rem">${avail} questions disponibles pour l'objectif « ${LV[S.obj]} ». Le format officiel (nombre de questions, durée, barème) est fixé par l'arrêté d'ouverture du concours : règle l'examen dessus.</p>
+      <p class="muted" style="font-size:.9rem">${avail} questions disponibles pour ce format et l'objectif « ${LV[S.obj]} ». L'arrêté d'ouverture de ton concours fait foi pour le format exact.</p>
       <div><button type="button" class="btn primary" id="exgo" ${avail?"":"disabled"}>Commencer l'examen</button></div>
     </div>
-    ${exHistory()}`;
+    ${exHistory()}
+    ${simHtml()}`;
   const n = exam.items.length;
   if(exam.done){
     const miss = exam.items.filter(it=>it.a!==0);
@@ -1309,6 +1503,7 @@ function vExamen(){
       <span class="label">Examen blanc · ${exam.timeout?"temps écoulé":"copie rendue"}</span>
       <div class="score num">${noteFr(exam.note)}<span style="font-size:1.6rem"> / 20</span></div>
       <p class="lead">${exam.ok} bonnes réponses sur ${n} (${pctOk} %) en ${Math.round(exam.used/60000)} min. ${exam.note>=14?"Très bon niveau : continue à t'entraîner en conditions réelles.":exam.note>=10?"La moyenne est là. Reprends les questions ratées ci-dessous.":"En dessous de la moyenne : travaille les thèmes faibles avec les révisions du jour, puis refais un examen."}</p>
+      ${exam.note<5 ? `<p class="explain no" style="margin:0"><b>Note éliminatoire</b> Au concours, une note inférieure à 5 / 20 à une épreuve écrite élimine le candidat. (${CADRAGE})</p>` : ""}
       <p class="muted" style="font-size:.9rem">Les questions ratées reviendront dans tes révisions du jour.</p>
       <div class="row"><button type="button" class="btn primary" id="exnew">Nouvel examen</button><a class="btn" href="#accueil">Tableau de bord</a></div>
     </section>
@@ -1329,6 +1524,8 @@ function vExamen(){
   </section>`;
 }
 function bindExamen(){
+  const xf=$("#exf"); if(xf) xf.onclick=e=>{const b=e.target.closest("[data-f]"); if(!b) return; exSetup.f=b.dataset.f; const F=EX_FMT[exSetup.f]; if(F.q) exSetup.n=F.q; if(F.min) exSetup.min=F.min; render();};
+  bindSim();
   const xn=$("#exn"); if(xn) xn.onclick=e=>{const b=e.target.closest("[data-n]"); if(b&&!b.disabled){exSetup.n=+b.dataset.n; render();}};
   const xm=$("#exm"); if(xm) xm.onclick=e=>{const b=e.target.closest("[data-m]"); if(b){exSetup.min=+b.dataset.m; render();}};
   const go=$("#exgo"); if(go) go.onclick=()=>{ startExam(); render(); };
@@ -1355,14 +1552,14 @@ function render(){
 /* Sessions en cours gardées sur l'appareil (départ en intervention, appli fermée…) puis retrouvées à la réouverture.
    L'examen blanc garde son temps restant : le chrono est en pause tant que l'appli est fermée. */
 const QBY = new Map(ALLQ.map(q=>[q.id,q])), FBY = new Map(ALLF.map(f=>[f.id,f]));
-ROUTES.mesq = "Mes questions"; VIEWS.mesq = [vMesq, bindMesq]; VIEWS.oral = [vOral, bindOral];
+ROUTES.mesq = "Mes questions"; VIEWS.mesq = [vMesq, bindMesq]; VIEWS.oral = [vOral, bindOral]; VIEWS.sport = [vSport, bindSport];
 injectMine();
 function saveRun(){
   const r = {};
   if(quizRunning()) r.quiz = {items:quiz.items.map(it=>[it.q.id,it.order,it.fmt||"qcm",it.s??null,it.v??null,it.vals||null,it.as||null]), i:quiz.i, picked:quiz.picked, score:quiz.score, wrong:quiz.wrong.map(q=>q.id), log:(quiz.log||[]).map(x=>[x.q.id,x.a,x.as||null]), t:quiz.t||0, sd:quiz.sd||"", rec0:quiz.rec0||0};
   if(deck && deck.i < deck.items.length) r.deck = {ids:deck.items.map(c=>c.id), i:deck.i, flip:deck.flip, known:deck.known};
   if(casRun && casRun.i < casRun.c.steps.length) r.cas = {id:casRun.c.id, i:casRun.i, picked:casRun.picked, score:casRun.score, order:casRun.order};
-  if(exam && !exam.done) r.exam = {items:exam.items.map(it=>[it.q.id,it.order,it.a]), i:exam.i, left:exam.end-Date.now(), min:exam.min};
+  if(exam && !exam.done) r.exam = {items:exam.items.map(it=>[it.q.id,it.order,it.a]), i:exam.i, left:exam.end-Date.now(), min:exam.min, f:exam.f||"libre"};
   LS.set("run", r);
 }
 function restoreRun(){
@@ -1379,7 +1576,7 @@ function restoreRun(){
       const items = r.exam.items.map(([id,order,a])=>({q:QBY.get(id), order, a}));
       if(items.every(it=>it.q)){
         const left = Math.max(1000, r.exam.left), now = Date.now();
-        exam = {items, i:r.exam.i, min:r.exam.min, end:now+left, start:now+left-r.exam.min*60000, done:false, confirm:false};
+        exam = {f:r.exam.f||"libre", items, i:r.exam.i, min:r.exam.min, end:now+left, start:now+left-r.exam.min*60000, done:false, confirm:false};
         runExamTimer();
       }
     }
