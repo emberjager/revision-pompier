@@ -44,14 +44,16 @@ const INTERVALS = [0,1,3,7,14,30];
 const MASTER = 3; // boîte à partir de laquelle une question est « maîtrisée »
 const boxOf = p => p ? (p.box ?? (p.ok ? 1 : 0)) : 0;
 const isDue = p => !!p && (p.due || today()) <= today();
-function sched(p, ok){ const box = ok ? Math.min(boxOf(p)+1, 5) : 0; return {box, due: addDays(today(), ok ? INTERVALS[box] : 1)}; }
+/* Concours fixé : les délais se resserrent (au plus un tiers du temps restant) pour que tout soit revu avant la date. */
+function capDays(d){ const dl = daysLeft(); if(dl===null || dl<=1) return d; return Math.max(1, Math.min(d, Math.ceil(dl/3), dl-1)); }
+function sched(p, ok){ const box = ok ? Math.min(boxOf(p)+1, 5) : 0; return {box, due: addDays(today(), ok ? capDays(INTERVALS[box]) : 1)}; }
 function tick(k=1){ const d = today(); S.days[d] = (S.days[d]||0) + k; }
 function recordQ(q, ok){
   const p = S.qp[q.id] || {n:0, c:0};
   S.qp[q.id] = {ok, n:p.n+1, c:p.c+(ok?1:0), ...sched(p, ok)}; tick();
 }
 /* Bonne réponse donnée en hésitant : la question reste dans sa boîte et revient plus tôt. */
-function schedHesitant(prev){ const box = boxOf(prev); return {box, due: addDays(today(), Math.max(1, INTERVALS[box]))}; }
+function schedHesitant(prev){ const box = boxOf(prev); return {box, due: addDays(today(), capDays(Math.max(1, INTERVALS[box])))}; }
 const fmtDay = k => new Date(k+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long", day:"numeric", month:"long"});
 function inDays(k){ const n = Math.round((new Date(k+"T12:00:00") - new Date(today()+"T12:00:00"))/864e5); return n<=0 ? "aujourd'hui" : n===1 ? "demain" : `dans ${n} jours`; }
 function streak(){
@@ -104,7 +106,7 @@ $("#obj").addEventListener("click", e => {
   const b = e.target.closest("button[data-obj]"); if(!b) return;
   S.obj = b.dataset.obj; save(); renderObj(); quiz=null; deck=null; casRun=null; render();
 });
-const ROUTES = {accueil:"Tableau de bord", qcm:"QCM", cartes:"Cartes", fiches:"Fiches", cas:"Cas pratiques", examen:"Examen blanc", reglages:"Réglages", signalements:"Mes signalements"};
+const ROUTES = {accueil:"Tableau de bord", niveau:"Mon niveau", qcm:"QCM", cartes:"Cartes", fiches:"Fiches", cas:"Cas pratiques", examen:"Examen blanc", reglages:"Réglages", signalements:"Mes signalements"};
 function route(){ const h=location.hash.slice(1); return ROUTES[h]?h:"accueil"; }
 const go = r => { if(route()===r) render(); else location.hash = r; };
 /* Navigation : onglets en haut sur PC ; sur téléphone, barre flottante en bas + bouton rond « Lancer » */
@@ -164,15 +166,18 @@ function activity(){
   }).join("")}</div>`;
 }
 /* Session du jour : questions à revoir d'abord, complétées par des nouvelles ; 10 à 20 questions selon ce qui reste de l'objectif. */
+/* Avec une date de concours : assez de nouvelles questions chaque jour pour avoir tout vu une semaine avant (40 questions au plus). */
 function dayPlan(){
-  const qs = visQ(), done = S.days[today()]||0;
+  const qs = visQ(), done = S.days[today()]||0, dl = daysLeft();
   const due = qs.filter(q=>isDue(S.qp[q.id])).length, fresh = qs.filter(q=>!S.qp[q.id]).length;
-  const n = Math.min(Math.max(10, Math.min(20, S.goal - done)), due + fresh);
-  const d = Math.min(due, n);
-  return {n, due:d, fresh:n-d, min:Math.max(1, Math.round(n*0.5))};
+  const base = Math.max(10, Math.min(20, S.goal - done));
+  const need = dl>0 && fresh ? Math.min(fresh, Math.ceil(fresh / Math.max(1, dl-7))) : 0;
+  const n = Math.min(Math.max(base, Math.min(40, Math.min(due, base) + need)), due + fresh);
+  const nf = Math.min(fresh, n - Math.min(due, need ? base : n, n));
+  return {n, due:n-nf, fresh:nf, need, min:Math.max(1, Math.round(n*0.5))};
 }
 const daysLeft = () => S.concours ? Math.round((new Date(S.concours+"T12:00:00") - new Date(today()+"T12:00:00"))/864e5) : null;
-const MODES = {all:"toutes", due:"à revoir", new:"jamais vues", err:"mes erreurs", fav:"mes favoris", sd:"mort subite"};
+const MODES = {all:"toutes", due:"à revoir", new:"jamais vues", err:"mes erreurs", fav:"mes favoris", sd:"mort subite", weak:"points faibles"};
 function cfgName(c){
   const all = themesForLevel(), th = (c.themes||[]).filter(t=>TH[t]);
   const t = !th.length || all.every(x=>th.includes(x)) ? "Tous thèmes" : th.map(x=>TH[x].k).join(" + ");
@@ -220,7 +225,7 @@ function vAccueil(){
   <section class="panel daycard">
     <div class="day-top"><span class="label">Session du jour · ${LV[S.obj]}</span>${jx}</div>
     ${p.n ? `<div><div class="day-n num">${p.n}<span> questions</span></div>
-      <p class="day-mix">${p.due?`<b class="due">${p.due} à revoir</b>`:"0 à revoir"} · ${p.fresh} nouvelle${p.fresh>1?"s":""} · ≈ ${p.min} min</p></div>
+      <p class="day-mix">${p.due?`<b class="due">${p.due} à revoir</b>`:"0 à revoir"} · ${p.fresh} nouvelle${p.fresh>1?"s":""} · ≈ ${p.min} min</p>${p.need?`<p class="muted" style="font-size:.85rem">Pour tout voir une semaine avant le concours : ${p.need} nouvelle${p.need>1?"s":""} par jour.</p>`:""}</div>
       <button type="button" class="btn primary big" data-quiz="day">Commencer</button>`
     : `<p class="lead">Tout est à jour : rien à revoir aujourd'hui et toutes les questions ont été vues. Fais un quiz rapide ou un examen blanc.</p>
       <button type="button" class="btn primary big" data-quiz="mix">Quiz rapide · 10 questions</button>`}
@@ -231,6 +236,7 @@ function vAccueil(){
     ${dueCards?`<div><button type="button" class="btn" id="go-cards">Cartes à revoir (${dueCards})</button></div>`:""}
   </section>
   ${runsHtml()}
+  ${prepMini()}
   ${quick?`<section class="quick"><span class="label">Lancer vite</span><div class="qlist">${quick}</div></section>`:""}
   <div class="stats">
     <div class="stat"><b class="num">${mastered}<span style="font-size:1rem"> / ${qs.length}</span></b><span>questions maîtrisées</span></div>
@@ -249,7 +255,7 @@ function vAccueil(){
     <details class="fiche corr"><summary>Comment marche la révision espacée ?</summary>
       <p>Chaque question est rangée dans une boîte, de 0 à 5. Une bonne réponse la fait monter d'une boîte, une erreur la renvoie en boîte 0.</p>
       <p>Plus la boîte est haute, plus la question revient tard : demain (boîte 0 ou 1), puis dans 3, 7, 14 et 30 jours. Une bonne réponse donnée en hésitant laisse la question dans sa boîte et la fait revenir plus tôt.</p>
-      <p>La session du jour reprend d'abord les questions arrivées à leur date (les plus en retard en premier), puis ajoute des nouvelles. Aujourd'hui : <b>${dueQ().length} à revoir</b>.</p></details>
+      <p>La session du jour reprend d'abord les questions arrivées à leur date (les plus en retard en premier), puis ajoute des nouvelles. Avec une date de concours, les délais sont raccourcis (jamais plus d'un tiers du temps restant) pour que tout soit revu avant le jour J. Aujourd'hui : <b>${dueQ().length} à revoir</b>.</p></details>
     <div class="legend muted"><span><i class="sw ok"></i>maîtrisées</span><span><i class="sw mid"></i>en cours</span></div>
     <div class="themes">${rows}</div></section>
   <section style="display:grid;gap:10px"><h3>14 derniers jours</h3>
@@ -268,6 +274,134 @@ function bindAccueil(){
   const gc = $("#go-cards"); if(gc) gc.onclick = () => { cardMode="todo"; startDeck(); go("cartes"); };
   const lb = document.querySelector("[data-last]"); if(lb) lb.onclick = () => launch(S.last);
   document.querySelectorAll("[data-p]").forEach(b => b.onclick = () => launch(S.presets[+b.dataset.p]));
+}
+
+/* ---------- Mon niveau : score de préparation, points faibles, plan semaine par semaine, examens blancs ---------- */
+const mastery = p => Math.min(boxOf(p), MASTER) / MASTER;
+function scoreOf(qs){
+  let m = 0, seen = 0;
+  qs.forEach(q => { const p = S.qp[q.id]; if(p){ seen++; m += mastery(p); } });
+  const n = qs.length; m = n ? m/n : 0; const c = n ? seen/n : 0;
+  return {n, seen, m, c, s: Math.round(100*(0.75*m + 0.25*c))};
+}
+/* Score global : maîtrise 60 %, couverture 20 %, moyenne des 3 derniers examens blancs 20 % (sans examen : 75 % / 25 %). */
+function readiness(){
+  const qs = visQ(), all = scoreOf(qs), ex = S.ex.slice(-3);
+  const e = ex.length ? ex.reduce((a,x)=>a+x.note, 0) / ex.length / 20 : null;
+  const s = Math.round(100*(e===null ? 0.75*all.m + 0.25*all.c : 0.6*all.m + 0.2*all.c + 0.2*e));
+  return {...all, s, e, nex:ex.length, themes: themesForLevel().map(t => ({t, ...scoreOf(qs.filter(q=>q.t===t))}))};
+}
+const gauge = (p, cls="") => `<div class="gauge ${cls}" style="--p:${p}" role="img" aria-label="${p} % prêt"><b class="num">${p}<small> %</small></b></div>`;
+/* Points faibles : thèmes et référentiels sous 80 % de bonnes réponses (au moins 5 réponses données) */
+function weakPoints(){
+  const groups = {}, tq = {}, srcN = {};
+  visQ().forEach(q => {
+    const sk = srcKey(q);
+    tq[q.t] = (tq[q.t]||0) + 1; srcN[sk] = (srcN[sk]||0) + 1;
+    const p = S.qp[q.id]; if(!p) return;
+    for(const k of [q.t, sk]){ const g = groups[k] || (groups[k] = {k, n:0, c:0, q:0}); g.n += p.n; g.c += p.c; g.q++; }
+  });
+  return Object.values(groups)
+    .filter(g => g.n >= 5 && !g.k.endsWith("|"+NOSRC))
+    .filter(g => !g.k.includes("|") || (srcN[g.k] < tq[g.k.split("|")[0]] && groups[g.k.split("|")[0]].n > g.n)) // même chiffres que le thème = doublon
+    .map(g => ({...g, r: g.c/g.n})).filter(g => g.r < 0.8)
+    .sort((a,b) => a.r - b.r).slice(0, 6);
+}
+function workOn(k){
+  if(!k.includes("|")){ startQuiz([k], 10, "weak"); go("qcm"); return; }
+  const t = k.split("|")[0];
+  const off = [...new Set(visQ().filter(q=>q.t===t).map(srcKey))].filter(x => x !== k);
+  startQuiz([t], 10, "weak", off); go("qcm");
+}
+/* Plan semaine par semaine jusqu'au concours, recalculé à chaque visite */
+const dayDiff = (a,b) => Math.round((new Date(b+"T12:00:00") - new Date(a+"T12:00:00"))/864e5);
+const mondayOf = k => addDays(k, -((new Date(k+"T12:00:00").getDay()+6)%7));
+const shortDay = k => new Date(k+"T12:00:00").toLocaleDateString("fr-FR", {day:"numeric", month:"short"});
+function weekPlan(){
+  const dl = daysLeft(); if(dl===null || dl<1) return null;
+  const r = readiness(), order = r.themes.filter(t=>t.n).sort((a,b)=>a.s-b.s).map(t=>t.t);
+  const unseen = r.n - r.seen, last = addDays(S.concours, -1), mon = mondayOf(today());
+  const perDay = unseen ? Math.ceil(unseen / Math.max(1, dl - 7)) : 0; // tout découvrir une semaine avant
+  const weeks = []; let left = unseen;
+  for(let i = 0; i < 80; i++){
+    const ws = addDays(mon, 7*i); if(ws > last) break;
+    const from = i ? ws : today(), to = addDays(ws, 6) < last ? addDays(ws, 6) : last;
+    const days = dayDiff(from, to) + 1, final = dayDiff(from, S.concours) <= 7;
+    const newQ = final ? 0 : Math.min(left, perDay * days); left -= newQ;
+    const exams = final ? 1 : dayDiff(from, S.concours) > 56 ? 1 : 2;
+    const focus = [...new Set(order.length ? [order[(2*i) % order.length], order[(2*i+1) % order.length]] : [])];
+    weeks.push({i, from, to, days, final, newQ, exams, focus});
+  }
+  const ansWeek = Object.entries(S.days).filter(([d]) => d >= mon).reduce((a,[,v])=>a+v, 0);
+  const exWeek = S.ex.filter(e => dayKey(new Date(e.d)) >= mon).length;
+  return {weeks, ansWeek, exWeek, target: S.goal*7};
+}
+/* Courbe des notes aux examens blancs : une seule série, donc pas de légende ; survol par point ; le tableau est l'historique de #examen */
+function examChart(){
+  const ex = S.ex.slice(-20);
+  if(ex.length < 2) return `<p class="muted">La courbe apparaît après 2 examens blancs${ex.length?" (1 passé pour l'instant)":""}.</p><div><a class="btn" href="#examen">Passer un examen blanc</a></div>`;
+  const W = 340, H = 160, L = 28, R = 12, T = 10, B = 24;
+  const x = i => L + (W-L-R) * i/(ex.length-1), y = v => T + (H-T-B) * (1 - v/20);
+  const dlab = e => new Date(e.d).toLocaleDateString("fr-FR", {day:"numeric", month:"short"});
+  const grid = [0,5,10,15,20].map(v => `<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" class="${v===10?"ref":"grid"}"/><text x="${L-7}" y="${y(v)+3.5}" text-anchor="end">${v}</text>`).join("");
+  const pts = ex.map((e,i) => [x(i).toFixed(1), y(e.note).toFixed(1)]);
+  return `<div class="exchart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Notes sur 20 des ${ex.length} derniers examens blancs, de ${noteFr(ex[0].note)} à ${noteFr(ex[ex.length-1].note)}">
+    ${grid}
+    <polyline points="${pts.map(p=>p.join(",")).join(" ")}" class="line"/>
+    ${ex.map((e,i) => `<g class="pt" tabindex="0"><title>${dlab(e)} : ${noteFr(e.note)} / 20 (${e.ok} / ${e.n} bonnes réponses)</title><circle cx="${pts[i][0]}" cy="${pts[i][1]}" r="13" class="hit"/><circle cx="${pts[i][0]}" cy="${pts[i][1]}" r="4.5" class="dot"/></g>`).join("")}
+    <text x="${L}" y="${H-6}">${dlab(ex[0])}</text><text x="${W-R}" y="${H-6}" text-anchor="end">${dlab(ex[ex.length-1])}</text>
+  </svg></div><p class="muted" style="font-size:.85rem">Notes sur 20. Le pointillé marque 10 / 20. Survole ou touche un point pour voir la note. La liste complète est dans <a href="#examen">Examen blanc</a>.</p>`;
+}
+function vNiveau(){
+  const r = readiness(), dl = daysLeft(), wp = weekPlan(), weak = weakPoints();
+  const pc = v => Math.round(100*v), pl = (n, w) => `${n} ${w}${n>1?"s":""}`, exS = n => `${n} examen${n>1?"s":""} blanc${n>1?"s":""}`;
+  const rows = r.themes.filter(t=>t.n).sort((a,b)=>b.s-a.s).map(t => `<div class="tline"><span class="tn">${badge(t.t)} ${TH[t.t].n}</span><div class="bar ${t.s>=70?"ok":""}" title="Maîtrise ${pc(t.m)} %, couverture ${pc(t.c)} %"><i style="width:${t.s}%"></i></div><b class="num">${t.s} %</b></div>`).join("");
+  const wkName = k => k.includes("|") ? `${badge(k.split("|")[0])} ${esc(k.slice(k.indexOf("|")+1))}` : `${badge(k)} ${TH[k].n}`;
+  const shown = wp ? (wp.weeks.length > 7 ? [...wp.weeks.slice(0,6), wp.weeks[wp.weeks.length-1]] : wp.weeks) : [];
+  const week = (w, j) => `
+      ${j===6 && wp.weeks.length>7 ? `<p class="muted plan-gap">… ${pl(wp.weeks.length-7, "autre semaine")} sur le même principe …</p>` : ""}
+      <div class="panel week ${w.i===0?"now":""}">
+        <div class="week-top"><b>${w.i===0?"Cette semaine":w.final?"Dernière semaine":`Semaine ${w.i+1}`}</b><span class="muted num">${shortDay(w.from)} → ${shortDay(w.to)}</span></div>
+        ${w.final ? `<p><b>Dernière ligne droite.</b> Pas de nouvelles questions : révisions du jour, tes erreurs et tes favoris. Un dernier examen blanc 2 ou 3 jours avant le concours.</p>`
+        : `<ul class="calc">
+          ${w.focus.length?`<li>En priorité : ${w.focus.map(t=>`${badge(t)} ${TH[t].n}`).join(" et ")}</li>`:""}
+          <li>${w.newQ ? `${w.newQ} nouvelles questions à découvrir (≈ ${Math.ceil(w.newQ/w.days)} par jour)` : "Toutes les questions sont vues : place aux révisions"}</li>
+          <li>${exS(w.exams)}</li></ul>`}
+        ${w.i===0 ? `<p class="muted" style="font-size:.9rem">Fait : <b class="num">${wp.ansWeek}</b> / ${wp.target} réponses · <b class="num">${wp.exWeek}</b> / ${exS(w.exams)}</p>` : ""}
+      </div>`;
+  return `<section style="display:grid;gap:8px"><span class="label">Suivi · ${LV[S.obj]}</span><h2>Mon niveau</h2></section>
+  <section class="panel prepcard">
+    <span class="label">Prêt pour le concours</span>
+    ${gauge(r.s)}
+    <p class="muted">${dl===null ? `<a href="#reglages">Indique la date du concours</a> pour avoir le plan de révision.` : dl>0 ? `Concours dans ${pl(dl, "jour")}, le ${fmtDay(S.concours)}.` : dl===0 ? "C'est le jour J. Bon courage !" : "La date du concours est passée."}</p>
+    <details class="fiche corr"><summary>Comment ce score est calculé</summary>
+      <ul class="calc">
+        <li><b>Maîtrise ${pc(r.m)} %</b>, compte pour ${r.e===null?"75":"60"} %. Chaque question vaut de 0 (jamais réussie) à 1 (boîte ${MASTER} ou plus).</li>
+        <li><b>Couverture ${pc(r.c)} %</b>, compte pour ${r.e===null?"25":"20"} %. ${r.seen} questions vues sur ${r.n}.</li>
+        <li><b>Examens blancs ${r.e===null?"–":pc(r.e)+" %"}</b>${r.e===null?" : pas encore d'examen. Ils compteront pour 20 %.":`, compte pour 20 %. Moyenne des ${r.nex>1?r.nex+" derniers":"dernier"}, ramenée sur 100.`}</li>
+      </ul>
+      <p class="muted">Le score de chaque thème suit la même règle, sans les examens : maîtrise 75 %, couverture 25 %.</p></details>
+  </section>
+  <section style="display:grid;gap:10px"><h3>Par thème</h3><div class="panel tlines">${rows}</div></section>
+  <section style="display:grid;gap:10px"><h3>Points faibles</h3>
+    ${weak.length ? `<div class="themes weak">${weak.map(g => `<div class="trow"><div class="name"><div>${wkName(g.k)}<small>${pc(g.r)} % de bonnes réponses · ${pl(g.q, "question")} vue${g.q>1?"s":""}</small></div></div><div class="bar"><i style="width:${pc(g.r)}%"></i></div><button type="button" class="btn" data-work="${esc(g.k)}">Travailler ça</button></div>`).join("")}</div>
+      <p class="muted" style="font-size:.85rem">Thèmes et référentiels sous 80 % de bonnes réponses, avec au moins 5 réponses données. « Travailler ça » lance 10 questions en commençant par celles que tu rates le plus.</p>`
+    : `<p class="muted">Aucun point faible repéré pour l'instant${r.seen<20?" : fais quelques quiz pour que l'appli les trouve":""}.</p>`}
+  </section>
+  <section style="display:grid;gap:10px"><h3>Plan jusqu'au concours</h3>
+    ${!wp ? `<div class="panel"><p class="muted">${dl===null?"Indique la date du concours dans les Réglages : le plan semaine par semaine s'affichera ici.":"Plus de plan : le concours est passé ou c'est aujourd'hui."}</p>${dl===null?`<div><a class="btn" href="#reglages">Indiquer la date</a></div>`:""}</div>`
+    : `<div class="plan">${shown.map(week).join("")}</div>
+      <p class="muted" style="font-size:.85rem">Le plan se recalcule à chaque visite selon ton score par thème et les questions encore jamais vues. Objectif : tout avoir vu une semaine avant le concours.</p>`}
+  </section>
+  <section style="display:grid;gap:10px"><h3>Examens blancs</h3><div class="panel">${examChart()}</div></section>`;
+}
+function bindNiveau(){
+  document.querySelectorAll("[data-work]").forEach(b => b.onclick = () => workOn(b.dataset.work));
+}
+/* Carte compacte de l'accueil */
+function prepMini(){
+  const r = readiness(), low = r.themes.filter(t=>t.n && t.seen).sort((a,b)=>a.s-b.s)[0];
+  return `<a class="panel prepmini" href="#niveau">${gauge(r.s, "sm")}<span><b>Prêt pour le concours</b><small>${low ? `Thème le plus faible : ${TH[low.t].n} (${low.s} %)` : "Fais quelques quiz pour voir ton niveau par thème"}</small></span><span class="go" aria-hidden="true">›</span></a>`;
 }
 
 /* ---------- Réglages ---------- */
@@ -374,11 +508,16 @@ function startQuiz(themes, n, mode, off, t){
   if(mode==="new") pool = pool.filter(q=>!S.qp[q.id]);
   if(mode==="due") pool = pool.filter(q=>isDue(S.qp[q.id]));
   if(mode==="fav") pool = pool.filter(q=>isFav(q.id));
+  if(mode==="weak"){ // points faibles : erreurs d'abord, puis les boîtes basses et les taux de réussite faibles
+    const sc = q => { const p = S.qp[q.id]; return p ? (p.ok?10:0) + boxOf(p) + p.c/p.n : 5.5; };
+    pool = shuffle(pool).sort((a,b)=>sc(a)-sc(b)).slice(0,n);
+  }
   if(mode==="sd") n = pool.length; // mort subite : on enchaîne jusqu'à la première erreur
   if(mode==="day"){
     // Révisions du jour : d'abord les questions arrivées à échéance (les plus en retard en premier), puis des nouvelles.
-    const due = shuffle(pool.filter(q=>isDue(S.qp[q.id]))).sort((a,b)=>S.qp[a.id].due<S.qp[b.id].due?-1:S.qp[a.id].due>S.qp[b.id].due?1:0).slice(0,n);
-    pool = shuffle([...due, ...shuffle(pool.filter(q=>!S.qp[q.id])).slice(0, n-due.length)]);
+    const dueAll = shuffle(pool.filter(q=>isDue(S.qp[q.id]))).sort((a,b)=>S.qp[a.id].due<S.qp[b.id].due?-1:S.qp[a.id].due>S.qp[b.id].due?1:0);
+    const d = dueAll.slice(0, Math.min(n, dayPlan().due)), f = shuffle(pool.filter(q=>!S.qp[q.id])).slice(0, n-d.length);
+    pool = shuffle([...d, ...f, ...dueAll.slice(d.length, d.length + n - d.length - f.length)]);
   }
   pool = shuffle(pool).slice(0,n);
   quiz = pool.length ? {items:pool.map(q=>({q, order:shuffle(q.o.map((_,i)=>i))})), i:0, picked:null, score:0, wrong:[], t:t||0} : {empty:true};
@@ -793,7 +932,7 @@ function bindExamen(){
 }
 
 /* ---------- Rendu ---------- */
-const VIEWS = {signalements:[vSignalements,bindSignalements], accueil:[vAccueil,bindAccueil], qcm:[vQcm,bindQcm], cartes:[vCartes,bindCartes], fiches:[vFiches,bindFiches], cas:[vCas,bindCas], examen:[vExamen,bindExamen], reglages:[vReglages,bindReglages]};
+const VIEWS = {niveau:[vNiveau,bindNiveau], signalements:[vSignalements,bindSignalements], accueil:[vAccueil,bindAccueil], qcm:[vQcm,bindQcm], cartes:[vCartes,bindCartes], fiches:[vFiches,bindFiches], cas:[vCas,bindCas], examen:[vExamen,bindExamen], reglages:[vReglages,bindReglages]};
 function render(){
   qtStop();
   renderTabs();

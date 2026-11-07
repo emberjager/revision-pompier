@@ -34,12 +34,12 @@ Légende : ☐ à faire · ◐ en cours · ☑ fait · 🎨 choix visuel à vali
 - ☑ **Q7. Révision espacée expliquée** : avant la réponse, étiquette « Nouvelle » ou « Boîte N / 5 » avec la raison du retour ; après, la boîte suivante et la date de la prochaine révision. Compteur « À revoir aujourd'hui (N) » dans le QCM, encart explicatif sur l'accueil.
 
 ## Phase 3 — Suivi du niveau et date du concours
-- ◐ **N1. Date du concours** : saisie dans Réglages et compte à rebours J-N sur la carte du jour (fait). Reste : l'utiliser pour N2 et N6.
-- ☐ **N2. Révisions adaptées à la date** : plus le concours approche, plus les intervalles se resserrent pour que tout soit revu avant la date. La part de nouvelles questions augmente quand il reste beaucoup de questions jamais vues.
-- ☐ **N3. Score de préparation (%)** — choix A validé : jauge ronde + détail par thème. Jauge globale calculée sur la maîtrise par thème, la couverture des questions vues et les notes aux examens blancs. Afficher le détail du calcul.
-- ☐ **N4. Points faibles** : liste des thèmes et référentiels au plus faible taux de réussite, avec un bouton « Travailler ça » qui lance le quiz ciblé.
-- ☐ **N5. Courbe des examens blancs** : évolution des notes sur 20 dans le temps.
-- ☐ **N6. Plan semaine par semaine** : objectifs automatiques jusqu'à la date, par exemple « cette semaine : FDF + SR, 1 examen blanc », recalculés selon les points faibles.
+- ☑ **N1. Date du concours** : saisie dans Réglages, compte à rebours J-N sur la carte du jour, utilisée par N2 et N6.
+- ☑ **N2. Révisions adaptées à la date** : le délai avant la prochaine révision ne dépasse jamais un tiers du temps restant (ni la veille du concours). La session du jour ajoute assez de nouvelles questions pour tout avoir vu une semaine avant (jusqu'à 40 questions), et la carte du jour l'indique.
+- ☑ **N3. Score de préparation (%)** — choix A : page « Mon niveau » (#niveau) avec une jauge ronde et un score par thème. Global = maîtrise 60 % + couverture 20 % + moyenne des 3 derniers examens blancs 20 % (sans examen : 75 % / 25 %). Le calcul est expliqué sous la jauge. Petite carte sur l'accueil.
+- ☑ **N4. Points faibles** : jusqu'à 6 thèmes ou référentiels sous 80 % de bonnes réponses (au moins 5 réponses). « Travailler ça » lance 10 questions en commençant par les plus ratées (mode « points faibles », aussi dans le QCM).
+- ☑ **N5. Courbe des examens blancs** : notes sur 20 des 20 derniers examens, ligne pointillée à 10, note au survol ou au toucher. Visible à partir de 2 examens.
+- ☑ **N6. Plan semaine par semaine** : de cette semaine au concours, 2 thèmes prioritaires par semaine (les plus faibles en premier), nouvelles questions à découvrir, 1 examen blanc par semaine (2 dans les 8 dernières semaines), dernière semaine sans nouvelles questions. Suivi de la semaine en cours (réponses et examens faits). Recalculé à chaque visite.
 - ☐ **N7. Format officiel de l'examen blanc** ❓ : bouton « Format officiel » préréglé. L'utilisateur donnera le nombre de questions, la durée et le barème.
 
 ## Phase 4 — Motivation
@@ -75,3 +75,4 @@ Légende : ☐ à faire · ◐ en cours · ☑ fait · 🎨 choix visuel à vali
 - ☑ Lots 1 à 8 : 573 questions.
 - ☑ Phase 1 Ergonomie (E1 à E8), 2026-11-07, service worker rsp-v18.
 - ☑ Phase 2 Fonctions quiz (Q1 à Q7), 2026-11-07, service worker rsp-v19.
+- ☑ Phase 3 Suivi du niveau (N1 à N6), 2026-11-07, service worker rsp-v20. N7 attend le format officiel.
