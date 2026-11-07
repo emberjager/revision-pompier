@@ -25,6 +25,10 @@ const S = {
   fav: LS.get("fav",{}),  // questions favorites : id -> date d'ajout (> 0) ou de retrait (< 0), pour fusionner entre appareils
   sd: LS.get("sd",{}),    // mort subite : clé de thèmes -> record
   lb: LS.get("lb",0),     // classement du CIS : date d'inscription (> 0) ou de départ (< 0)
+  oral: LS.get("oral",[]), // oraux d'entraînement : [{at, k, q, sc:[5 notes sur 4], note, dur}]
+  oralT: LS.get("oralT",null), // durées du chrono de l'oral {prep, talk} en minutes
+  mine: LS.get("mine",{}), // mes questions : id -> {t, q, o, e, src, at, del?}
+  mineT: LS.get("mineT","suap"), // dernier thème choisi pour une nouvelle question
   rep: LS.get("rep",[])   // signalements (gardés sur l'appareil seulement) : [{id, t, q, kind, note, at}]
 };
 const isFav = id => (S.fav[id]||0) > 0;
@@ -32,7 +36,7 @@ const isFav = id => (S.fav[id]||0) > 0;
 const OLD_TH = ["suap","inc","div","sr","fdf","cult","com"];
 const withNewThemes = (themes, known) => [...themes, ...Object.keys(TH).filter(t => !known.includes(t) && !themes.includes(t))];
 S.themes = withNewThemes(S.themes, LS.get("thk", OLD_TH)); LS.set("thk", Object.keys(TH));
-const KEYS = ["obj","themes","qp","fp","cp","fs","days","goal","ex","qcm","presets","last","concours","fav","sd","rep","lb"];
+const KEYS = ["obj","themes","qp","fp","cp","fs","days","goal","ex","qcm","presets","last","concours","fav","sd","rep","lb","mine","mineT","oral","oralT"];
 const save = () => { KEYS.forEach(k => LS.set(k, S[k])); if (window.onLocalSave) window.onLocalSave(); motivCheck(); renderStreak(); };
 
 /* ---------- Répétition espacée et activité du jour ----------
@@ -107,7 +111,7 @@ $("#obj").addEventListener("click", e => {
   const b = e.target.closest("button[data-obj]"); if(!b) return;
   S.obj = b.dataset.obj; save(); renderObj(); quiz=null; deck=null; casRun=null; render();
 });
-const ROUTES = {accueil:"Tableau de bord", niveau:"Mon niveau", qcm:"QCM", cartes:"Cartes", fiches:"Fiches", cas:"Cas pratiques", examen:"Examen blanc", reglages:"Réglages", signalements:"Mes signalements"};
+const ROUTES = {accueil:"Accueil", niveau:"Mon niveau", qcm:"QCM", cartes:"Cartes", fiches:"Fiches", cas:"Cas pratiques", examen:"Examen blanc", oral:"Oral", reglages:"Réglages", signalements:"Mes signalements"};
 function route(){ const h=location.hash.slice(1); return ROUTES[h]?h:"accueil"; }
 const go = r => { if(route()===r) render(); else location.hash = r; };
 /* Navigation : onglets en haut sur PC ; sur téléphone, barre flottante en bas + bouton rond « Lancer » */
@@ -116,7 +120,7 @@ let moreOpen = false;
 const quizRunning = () => !!(quiz && !quiz.empty && quiz.i < quiz.items.length);
 function renderTabs(){
   const r = route();
-  $("#tabs").innerHTML = Object.entries(ROUTES).filter(([k])=>k!=="reglages"&&k!=="signalements").map(([k,v]) => `<a href="#${k}" ${r===k?'aria-current="page"':''}>${v}</a>`).join("");
+  $("#tabs").innerHTML = Object.entries(ROUTES).filter(([k])=>k!=="reglages"&&k!=="signalements"&&k!=="mesq").map(([k,v]) => `<a href="#${k}" ${r===k?'aria-current="page"':''}>${v}</a>`).join("");
   const more = Object.keys(ROUTES).filter(k=>!BAR.includes(k) && (k!=="signalements" || S.rep.length));
   const cur = k => r===k ? 'aria-current="page"' : "";
   $("#bnav").innerHTML = `<div class="more" id="more" ${moreOpen?"":"hidden"}>${more.map(k=>`<a href="#${k}" ${cur(k)}>${ROUTES[k]}</a>`).join("")}</div>
@@ -178,7 +182,7 @@ function dayPlan(){
   return {n, due:n-nf, fresh:nf, need, min:Math.max(1, Math.round(n*0.5))};
 }
 const daysLeft = () => S.concours ? Math.round((new Date(S.concours+"T12:00:00") - new Date(today()+"T12:00:00"))/864e5) : null;
-const MODES = {all:"toutes", due:"à revoir", new:"jamais vues", err:"mes erreurs", fav:"mes favoris", sd:"mort subite", weak:"points faibles"};
+const MODES = {all:"toutes", due:"à revoir", new:"jamais vues", err:"mes erreurs", fav:"mes favoris", mine:"mes questions", sd:"mort subite", weak:"points faibles"};
 function cfgName(c){
   const all = themesForLevel(), th = (c.themes||[]).filter(t=>TH[t]);
   const t = !th.length || all.every(x=>th.includes(x)) ? "Tous thèmes" : th.map(x=>TH[x].k).join(" + ");
@@ -189,8 +193,8 @@ function cfgName(c){
 function launch(c){
   if(!c) return;
   const avail = themesForLevel(); let th = (c.themes||[]).filter(t=>avail.includes(t)); if(!th.length) th = avail;
-  S.last = {themes:th, n:c.n, mode:c.mode, off:[...(c.off||[])], t:c.t||0, at:Date.now()}; save();
-  startQuiz(th, c.n, c.mode, c.off, c.t); go("qcm");
+  S.last = {themes:th, n:c.n, mode:c.mode, off:[...(c.off||[])], t:c.t||0, fmt:c.fmt||"mix", at:Date.now()}; save();
+  startQuiz(th, c.n, c.mode, c.off, c.t, c.fmt); go("qcm");
 }
 /* Sessions interrompues (quiz, examen, cartes, cas) à continuer */
 function runsHtml(){
@@ -552,6 +556,189 @@ function bindRemind(){
   const hh = $("#rem-h"); if(hh) hh.onclick = e => { const b = e.target.closest("[data-h]"); if(b){ LS.set("remindh", +b.dataset.h); remindLast = ""; remindSave(); render(); } };
 }
 
+/* ---------- Oral : question de jury, chrono, méthode, auto-évaluation ---------- */
+// Pas de durée officielle codée en dur : le candidat règle le chrono d'après le règlement de son concours.
+const ORAL = {
+  pres:{n:"Ma présentation", q:["Présentez-vous au jury.","Résumez votre parcours en quelques minutes.","Qu'est-ce qui, dans votre parcours, vous prépare au métier de sapeur-pompier professionnel ?","Quelles sont vos qualités et vos points à améliorer ?"],
+    m:"Plan annoncé dès la première phrase : qui tu es, ton parcours (études, emplois, engagement SPV, formations), tes points forts avec un exemple chacun, ton projet. Regarde le jury, ne récite pas un texte appris par cœur, finis à l'heure."},
+  motiv:{n:"Motivation et parcours", q:["Pourquoi voulez-vous devenir sapeur-pompier professionnel ?","Qu'est-ce que votre engagement de volontaire vous a apporté ?","Pourquoi passer professionnel plutôt que rester volontaire ?","Racontez une intervention qui vous a marqué et ce que vous en avez retiré.","Où vous voyez-vous dans dix ans ?","Seriez-vous prêt à être affecté loin de chez vous ?","Que faites-vous si vous n'êtes pas reçu cette année ?"],
+    m:"Fil conducteur : le déclic, ton engagement, ce que tu as appris, pourquoi maintenant, ce que tu apportes. Appuie-toi sur des faits vécus (sans nom ni détail médical de victime). Termine sur ton projet."},
+  metier:{n:"Le métier et les missions", q:["Quelles sont les missions des services d'incendie et de secours ?","Quel est le rôle d'un caporal ?","Quelle différence faites-vous entre un équipier et un chef d'équipe ?","Comment voyez-vous l'évolution du secours d'urgence aux personnes ?","Quelles sont les spécificités des feux de forêt dans le Var ?","Que pensez-vous de la place des volontaires dans le modèle français ?","Comment se déroule une garde dans votre centre ?"],
+    m:"Annonce deux ou trois parties. Cite la base (missions des SDIS : article L1424-2 du code général des collectivités territoriales), puis illustre avec ton vécu au CIS. Montre que tu connais ton rôle et ses limites. Vérifie tes chiffres (interventions, effectifs) dans tes documents avant l'oral."},
+  orga:{n:"Organisation et institutions", q:["Comment est organisé votre SDIS ?","Qui dirige les opérations de secours ?","Qui finance le SDIS ?","Quel est le rôle du préfet en matière de sécurité civile ?","Que savez-vous de la direction générale de la sécurité civile et de la gestion des crises ?","Qu'est-ce que le SDACR ?","Comment s'articulent le SAMU et les sapeurs-pompiers ?"],
+    m:"Va du national au local (État, département, SDIS, groupement, CIS). Définis chaque sigle la première fois. Si tu ne sais pas, dis-le simplement et dis où tu irais chercher l'information : le jury préfère l'honnêteté à l'invention. Révise ces points dans tes cours de culture administrative."},
+  situ:{n:"Mises en situation", q:["Un collègue arrive en garde en sentant l'alcool. Que faites-vous ?","Sur intervention, un témoin filme la victime avec son téléphone. Que faites-vous ?","Votre chef d'agrès donne un ordre qui vous paraît dangereux. Comment réagissez-vous ?","Une victime vous agresse verbalement. Comment gérez-vous ?","Vous constatez qu'un équipement de protection est abîmé avant de partir en intervention. Que faites-vous ?","Un jeune sapeur-pompier de votre équipe est mis à l'écart par les autres. Que faites-vous ?","Un journaliste vous interroge sur une intervention en cours. Que répondez-vous ?"],
+    m:"Méthode : la sécurité d'abord (toi, l'équipe, la victime), tu analyses, tu rends compte à ton supérieur, tu agis dans ton rôle, tu rends compte à nouveau. Pour un problème humain : écouter, rester calme, recadrer avec respect, en parler à la hiérarchie. Ne te présente pas en héros solitaire."},
+  valeurs:{n:"Valeurs et déontologie", q:["Quelles valeurs associez-vous au métier de sapeur-pompier ?","Que signifie pour vous l'obligation de réserve ?","Qu'est-ce que le secret professionnel pour un sapeur-pompier ?","Que représente pour vous la discipline ?","Que pensez-vous de l'usage des réseaux sociaux par les sapeurs-pompiers ?","Comment réagir face à des propos discriminants dans une équipe ?"],
+    m:"Pour chaque valeur : une définition simple, un exemple vécu, comment tu l'appliqueras comme caporal. Reste mesuré sur les sujets de société : réponds en agent du service public, sans avis politique."},
+  sante:{n:"Santé et sécurité", q:["Comment entretenez-vous votre condition physique ?","Que faites-vous pour prévenir les accidents en intervention ?","Comment gérez-vous le stress après une intervention difficile ?","Que savez-vous des risques liés aux fumées pour la santé des sapeurs-pompiers ?","Comment encourageriez-vous votre équipe à respecter le port des EPI ?"],
+    m:"Parle prévention et habitudes concrètes : entraînement, hydratation, EPI, décontamination, suivi médical, entraide et soutien psychologique. Donne ce que tu fais toi-même, pas seulement la théorie."}
+};
+const ORAL_CRIT = [["Structure","plan annoncé, idées dans l'ordre, conclusion"],["Clarté","voix, débit, vocabulaire, pas de tics"],["Connaissances","réponses justes, exemples précis"],["Posture","regard, attitude, gestion du stress"],["Temps","durée respectée, ni trop court ni trop long"]];
+const ORAL_LV = ["","Insuffisant","À travailler","Bien","Très bien"];
+const oral = {cat:"all", q:null, k:null, phase:null, end:0, left:0, timer:null, sc:[0,0,0,0,0], note:"", saved:false};
+const oralDur = () => ({prep:0, talk:5, ...(S.oralT||{})});
+const mmss = ms => { const s = Math.max(0, Math.ceil(ms/1000)); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); };
+function oralDraw(){
+  const cats = oral.cat==="all" ? Object.keys(ORAL) : [oral.cat];
+  const pool = cats.flatMap(k => ORAL[k].q.map(q => [k,q])).filter(([,q]) => q !== oral.q);
+  const [k,q] = pool[Math.floor(Math.random()*pool.length)];
+  oralStop(); Object.assign(oral, {k, q, phase:null, left:0, sc:[0,0,0,0,0], note:"", saved:false});
+}
+function oralStop(){ if(oral.timer){ clearInterval(oral.timer); oral.timer = null; } }
+function oralStart(){
+  const d = oralDur();
+  if(!oral.phase || oral.phase==="done"){ oral.phase = d.prep ? "prep" : "talk"; oral.left = (oral.phase==="prep" ? d.prep : d.talk)*60000; }
+  oral.end = Date.now() + oral.left; oralStop(); oral.timer = setInterval(oralTick, 250); render();
+}
+function oralPause(){ oral.left = Math.max(0, oral.end - Date.now()); oralStop(); render(); }
+function oralTick(){
+  const el = $("#ochr"); if(!el){ oralPause(); return; } // on a quitté la page : le chrono se met en pause
+  const left = oral.end - Date.now(), d = oralDur(), tot = (oral.phase==="prep" ? d.prep : d.talk)*60000;
+  if(left <= 0){
+    oralStop();
+    if(oral.phase==="prep"){ oral.phase = "talk"; oral.left = d.talk*60000; try{ navigator.vibrate && navigator.vibrate(200); }catch(e){} oralStart(); return; }
+    oral.phase = "done"; oral.left = 0; try{ navigator.vibrate && navigator.vibrate([300,150,300]); }catch(e){} render(); return;
+  }
+  el.textContent = mmss(left); const b = $("#ochrbar"); if(b) b.style.width = (100*left/tot)+"%";
+  el.classList.toggle("warn", oral.phase==="talk" && left < 30000);
+}
+function oralStats(){
+  const h = S.oral||[]; if(!h.length) return "";
+  const last = h.slice(-10).reverse(), avg = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0;
+  const crit = ORAL_CRIT.map((c,i) => [c[0], avg(h.slice(-5).map(o=>o.sc[i]))]);
+  const weak = [...crit].sort((a,b)=>a[1]-b[1])[0];
+  return `<section style="display:grid;gap:10px"><h3>Mes oraux d'entraînement (${h.length})</h3>
+    <div class="panel tlines">${crit.map(([n,v])=>`<div class="tline"><span class="tn">${n}</span><div class="bar"><i style="width:${100*v/4}%"></i></div><b class="num">${v.toFixed(1)}</b></div>`).join("")}
+    <p class="muted" style="font-size:.9rem">Moyenne sur 4 de tes 5 derniers oraux. ${weak[1] < 3 ? `Point à travailler en priorité : <b>${weak[0].toLowerCase()}</b>.` : "Continue comme ça."}</p></div>
+    <ul class="errlist">${last.map(o=>`<li><p><b class="num">${o.sc.reduce((a,b)=>a+b,0)}/20</b> · ${esc(o.q)}</p><p class="muted" style="font-size:.85rem">${new Date(o.at).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})} · ${ORAL[o.k] ? ORAL[o.k].n : ""}${o.dur ? ` · ${o.dur} min` : ""}${o.note ? ` · « ${esc(o.note)} »` : ""}</p></li>`).join("")}</ul></section>`;
+}
+function vOral(){
+  const d = oralDur(), run = !!oral.timer, c = oral.k ? ORAL[oral.k] : null;
+  const tot = (oral.phase==="prep" ? d.prep : d.talk)*60000, left = run ? oral.end - Date.now() : oral.phase ? oral.left : (d.prep||d.talk)*60000;
+  const full = oral.sc.every(x=>x>0);
+  return `<section style="display:grid;gap:8px"><span class="label">Concours SPP</span><h2>Oral</h2>
+    <p class="lead">Tire une question de jury, prépare-toi, réponds à voix haute avec le chrono, puis note-toi honnêtement. Idéal à deux : un collègue joue le jury.</p></section>
+  <div class="panel">
+    <span class="label">Type de question</span>
+    <div class="chips" id="ocat"><button type="button" class="chip" data-c="all" aria-pressed="${oral.cat==="all"}">Toutes</button>${Object.entries(ORAL).map(([k,v])=>`<button type="button" class="chip" data-c="${k}" aria-pressed="${oral.cat===k}">${v.n}</button>`).join("")}</div>
+    <span class="label">Chrono (règle-le d'après le règlement de ton concours)</span>
+    <div class="ochips"><span>Préparation</span><div class="chips" id="oprep">${[0,2,5,10,15,20].map(m=>`<button type="button" class="chip" data-m="${m}" aria-pressed="${d.prep===m}">${m?m+" min":"aucune"}</button>`).join("")}</div></div>
+    <div class="ochips"><span>Réponse</span><div class="chips" id="otalk">${[1,2,3,5,10,15,20].map(m=>`<button type="button" class="chip" data-m="${m}" aria-pressed="${d.talk===m}">${m} min</button>`).join("")}</div></div>
+    <div><button type="button" class="btn primary" id="odraw">${oral.q ? "Autre question" : "Tirer une question"}</button></div>
+  </div>
+  ${oral.q ? `<section class="panel oq">
+    <span class="label">${c.n}</span>
+    <p class="oq-q">${esc(oral.q)}</p>
+    <div class="ochr"><span class="label">${oral.phase==="prep" ? "Préparation" : oral.phase==="done" ? "Temps écoulé" : "Réponse"}</span>
+      <b class="num ${oral.phase==="done"?"warn":""}" id="ochr">${mmss(left)}</b>
+      <div class="bar"><i id="ochrbar" style="width:${oral.phase ? 100*Math.max(0,left)/tot : 100}%"></i></div></div>
+    <div class="row">${run ? `<button type="button" class="btn primary" id="opause">Pause</button>` : `<button type="button" class="btn primary" id="ostart">${oral.phase && oral.phase!=="done" ? "Reprendre" : oral.phase==="done" ? "Recommencer" : "Démarrer"}</button>`}
+      ${oral.phase==="prep" ? `<button type="button" class="btn" id="oskip">Passer à la réponse</button>` : ""}${oral.phase && oral.phase!=="done" ? `<button type="button" class="btn" id="oend">J'ai fini</button>` : ""}</div>
+    <details class="omethod"><summary>Comment structurer ta réponse</summary><p>${c.m}</p></details>
+  </section>
+  <form class="panel" id="oeval"><h3>Ton auto-évaluation</h3>
+    ${ORAL_CRIT.map(([n,h],i)=>`<div class="ocrit"><div><b>${n}</b><small>${h}</small></div><div class="chips" data-i="${i}">${[1,2,3,4].map(v=>`<button type="button" class="chip" data-v="${v}" aria-pressed="${oral.sc[i]===v}" title="${ORAL_LV[v]}">${v}</button>`).join("")}</div></div>`).join("")}
+    <p class="muted" style="font-size:.85rem">1 = insuffisant · 2 = à travailler · 3 = bien · 4 = très bien${full ? ` · total <b class="num">${oral.sc.reduce((a,b)=>a+b,0)}/20</b>` : ""}</p>
+    <label class="label" for="onote">Note pour la prochaine fois (facultatif)</label>
+    <input class="field" id="onote" maxlength="140" value="${esc(oral.note)}" placeholder="Ex. annoncer mon plan, moins de « euh »">
+    <div class="row"><button class="btn primary" ${full && !oral.saved ? "" : "disabled"}>${oral.saved ? "Enregistré ✓" : "Enregistrer"}</button>${full ? "" : `<span class="muted" style="font-size:.85rem">Note les 5 critères pour enregistrer.</span>`}</div>
+  </form>` : ""}
+  ${oralStats()}`;
+}
+function bindOral(){
+  const pick = (id, fn) => { const el = $(id); if(el) el.onclick = e => { const b = e.target.closest("button"); if(b) fn(b); }; };
+  pick("#ocat", b => { oral.cat = b.dataset.c; render(); });
+  pick("#oprep", b => { S.oralT = {...oralDur(), prep:+b.dataset.m}; save(); if(!oral.timer && oral.phase!=="talk"){ oral.phase = null; } render(); });
+  pick("#otalk", b => { S.oralT = {...oralDur(), talk:+b.dataset.m}; save(); if(!oral.timer){ oral.phase = null; } render(); });
+  $("#odraw").onclick = () => { oralDraw(); render(); };
+  const st = $("#ostart"); if(st) st.onclick = oralStart;
+  const pa = $("#opause"); if(pa) pa.onclick = oralPause;
+  const sk = $("#oskip"); if(sk) sk.onclick = () => { oralStop(); oral.phase = "talk"; oral.left = oralDur().talk*60000; oralStart(); };
+  const en = $("#oend"); if(en) en.onclick = () => { oralStop(); oral.phase = "done"; oral.left = 0; render(); };
+  const f = $("#oeval");
+  if(f){
+    f.querySelectorAll(".chips[data-i]").forEach(g => g.onclick = e => { const b = e.target.closest("[data-v]"); if(!b) return; oral.note = $("#onote").value; oral.sc[+g.dataset.i] = +b.dataset.v; oral.saved = false; render(); });
+    f.onsubmit = e => {
+      e.preventDefault(); if(!oral.sc.every(x=>x>0) || oral.saved) return;
+      oral.note = $("#onote").value.trim();
+      (S.oral = S.oral||[]).push({at:Date.now(), k:oral.k, q:oral.q, sc:[...oral.sc], note:oral.note, dur:oralDur().talk});
+      S.oral = S.oral.slice(-100); oral.saved = true; tick(); save(); render(); toast("Oral enregistré : "+oral.sc.reduce((a,b)=>a+b,0)+"/20");
+    };
+  }
+  if(oral.timer) oralTick();
+}
+
+/* ---------- Mes questions (ajoutées dans le site, synchronisées avec le compte) ---------- */
+// S.mine : id -> {t, q, o:[bonne, mauvaises…], e, src, at, del?}. Une suppression garde une trace (del) pour se propager aux autres appareils.
+const MINE_SRC = "Mes questions";
+let mqEdit = null, mqDel = null, mqMsg = "";
+const mineList = () => Object.entries(S.mine||{}).filter(([,m])=>m && !m.del && TH[m.t] && typeof m.q==="string" && Array.isArray(m.o) && m.o.length>=2).sort((a,b)=>b[1].at-a[1].at);
+function injectMine(){
+  for(let i = ALLQ.length-1; i >= 0; i--) if(ALLQ[i].mine){ QBY.delete(ALLQ[i].id); ALLQ.splice(i,1); }
+  for(const [id,m] of mineList()){
+    const src = m.src ? esc(m.src) : "";
+    const q = {t:m.t, id:"mine-"+id, mine:true, q:esc(m.q), o:m.o.map(esc), e:(m.e ? esc(m.e) : "Question ajoutée par toi.") + (src ? ` (${src})` : "")};
+    ALLQ.push(q); QBY.set(q.id, q);
+  }
+}
+function vMesq(){
+  const L = mineList(), ed = mqEdit && S.mine[mqEdit] ? S.mine[mqEdit] : null;
+  const v = (x, i) => ed ? esc(i==null ? (ed[x]||"") : (ed.o[i]||"")) : "";
+  return `<section style="display:grid;gap:8px"><span class="label">QCM</span><h2>Mes questions</h2>
+    <p class="lead">Ajoute tes propres questions (tirées de tes cours, d'une manœuvre, d'une consigne du CIS…). Elles entrent dans les quiz du thème choisi, en QCM, vrai / faux ou à compléter, avec la répétition espacée.</p></section>
+  <form class="panel mqform" id="mqf">
+    <h3>${ed ? "Modifier la question" : "Nouvelle question"}</h3>
+    <label class="label" for="mqt">Thème</label>
+    <select class="field" id="mqt">${Object.entries(TH).map(([k,t])=>`<option value="${k}" ${(ed ? ed.t : (S.mineT||"suap"))===k?"selected":""}>${t.n}</option>`).join("")}</select>
+    <label class="label" for="mqq">Question</label>
+    <textarea class="field" id="mqq" rows="3" maxlength="300" required placeholder="Ex. Quelle est la pression de fonctionnement d'une lance à débit variable ?">${v("q")}</textarea>
+    <label class="label" for="mqa">Bonne réponse</label>
+    <input class="field ok" id="mqa" maxlength="160" required value="${v("o",0)}" placeholder="Ex. 6 bar">
+    <span class="label">Mauvaises réponses (au moins une, trois de préférence)</span>
+    ${[1,2,3].map(i=>`<input class="field" id="mqw${i}" maxlength="160" ${i===1?"required":""} value="${v("o",i)}" aria-label="Mauvaise réponse ${i}" placeholder="${["Ex. 4 bar","Ex. 8 bar","Ex. 10 bar"][i-1]}">`).join("")}
+    <label class="label" for="mqe">Explication (facultatif)</label>
+    <textarea class="field" id="mqe" rows="2" maxlength="500" placeholder="Pourquoi c'est la bonne réponse">${v("e")}</textarea>
+    <label class="label" for="mqs">Source (facultatif)</label>
+    <input class="field" id="mqs" maxlength="120" value="${v("src")}" placeholder="Ex. GDO Établissements, p. 12">
+    <p class="muted" style="font-size:.9rem">Vérifie ta question dans le référentiel avant de l'enregistrer : elle n'est relue par personne.${typeof acct!=="undefined" && acct.user ? "" : " Elle reste sur cet appareil tant que tu n'es pas connecté."}</p>
+    <div class="row"><button class="btn primary">${ed ? "Enregistrer les modifications" : "Ajouter la question"}</button>${ed ? `<button type="button" class="btn" id="mqcancel">Annuler</button>` : ""}<span class="muted" role="status">${mqMsg}</span></div>
+  </form>
+  <section style="display:grid;gap:10px">
+    <div class="row" style="justify-content:space-between"><h3>Mes ${L.length} question${L.length>1?"s":""}</h3>${L.length ? `<button type="button" class="btn primary" id="mqgo">Réviser mes questions</button>` : ""}</div>
+    ${L.length ? `<ul class="errlist">${L.map(([id,m])=>{ const p = S.qp["mine-"+id];
+      return `<li><p>${badge(m.t)} <b>${esc(m.q)}</b></p><p style="color:var(--ok);font-weight:600">✓ ${esc(m.o[0])}</p><p class="muted">✗ ${m.o.slice(1).map(esc).join(" · ")}</p>
+        <p class="muted" style="font-size:.85rem">${m.src ? esc(m.src)+" · " : ""}${p ? `${p.c}/${p.n} juste${p.c>1?"s":""}` : "jamais vue"} ·
+        ${mqDel===id ? `Supprimer ? <button type="button" class="linkbtn" data-mqyes="${id}">Oui</button> <button type="button" class="linkbtn" data-mqno>Non</button>`
+          : `<button type="button" class="linkbtn" data-mqed="${id}">Modifier</button> · <button type="button" class="linkbtn" data-mqdel="${id}">Supprimer</button>`}</p></li>`; }).join("")}</ul>`
+      : `<div class="empty">Aucune question pour l'instant.<br>Elles apparaîtront aussi dans le choix des référentiels du QCM, sous « ${MINE_SRC} ».</div>`}
+  </section>
+  <div><a class="btn" href="#qcm">← QCM</a></div>`;
+}
+function bindMesq(){
+  const f = $("#mqf");
+  f.onsubmit = e => {
+    e.preventDefault();
+    const val = id => $("#"+id).value.trim().replace(/\s+/g," ");
+    const t = $("#mqt").value, q = val("mqq"), a = val("mqa"), w = [1,2,3].map(i=>val("mqw"+i)).filter(Boolean);
+    if(!q || !a || !w.length) return;
+    const all = [a, ...w].map(x=>x.toLowerCase());
+    if(new Set(all).size < all.length){ mqMsg = "Deux réponses sont identiques."; render(); return; }
+    const id = mqEdit || Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+    S.mine[id] = {t, q, o:[a, ...w], e:val("mqe"), src:val("mqs"), at:Date.now()};
+    S.mineT = t; mqMsg = mqEdit ? "Question modifiée." : "Question ajoutée."; mqEdit = null;
+    injectMine(); save(); render();
+    if(!mqEdit) setTimeout(()=>{ const x = $("#mqq"); if(x) x.focus(); }, 0);
+  };
+  const c = $("#mqcancel"); if(c) c.onclick = () => { mqEdit = null; mqMsg = ""; render(); };
+  document.querySelectorAll("[data-mqed]").forEach(b => b.onclick = () => { mqEdit = b.dataset.mqed; mqDel = null; mqMsg = ""; render(); window.scrollTo(0,0); });
+  document.querySelectorAll("[data-mqdel]").forEach(b => b.onclick = () => { mqDel = b.dataset.mqdel; render(); });
+  document.querySelectorAll("[data-mqno]").forEach(b => b.onclick = () => { mqDel = null; render(); });
+  document.querySelectorAll("[data-mqyes]").forEach(b => b.onclick = () => { const id = b.dataset.mqyes; S.mine[id] = {del:true, at:Date.now()}; if(mqEdit===id) mqEdit = null; mqDel = null; mqMsg = "Question supprimée."; injectMine(); save(); render(); });
+  const g = $("#mqgo"); if(g) g.onclick = () => { const th = [...new Set(mineList().map(([,m])=>m.t))]; launch({themes:th, n:999, mode:"mine", off:[], t:qcmSetup.t, fmt:qcmSetup.fmt}); };
+  mqMsg = "";
+}
+
 /* ---------- Réglages ---------- */
 function vReglages(){
   const dl = daysLeft();
@@ -572,7 +759,10 @@ function vReglages(){
     <div class="confirm" id="reset"><button type="button" class="btn" id="reset-ask">Réinitialiser ma progression</button></div></section>
   <section class="panel"><h3>Questions signalées</h3>
     <p class="muted">Les questions marquées « erreur » ou « doute » pendant un quiz, à copier pour les faire corriger.</p>
-    <div><a class="btn" href="#signalements">Mes signalements (${S.rep.length})</a></div></section>`;
+    <div><a class="btn" href="#signalements">Mes signalements (${S.rep.length})</a></div></section>
+  <section class="panel"><h3>Mes questions</h3>
+    <p class="muted">Tes propres questions, ajoutées dans le site et mélangées aux quiz.</p>
+    <div><a class="btn" href="#mesq">Mes questions (${mineList().length})</a></div></section>`;
 }
 function bindReglages(){
   $("#thm").onclick = e => { const b=e.target.closest("[data-th]"); if(b){ setTheme(b.dataset.th); render(); } };
@@ -626,13 +816,13 @@ function bindSignalements(){
 
 /* ---------- QCM ---------- */
 let quiz = null;
-let qcmSetup = {n:10, mode:"all", off:[], t:0, ...S.qcm, srcOpen:false, pform:false};
-const saveSetup = () => { S.qcm = {n:qcmSetup.n, mode:qcmSetup.mode, off:[...qcmSetup.off], t:qcmSetup.t}; save(); };
-const curCfg = () => ({themes:activeThemes(), n:qcmSetup.n, mode:qcmSetup.mode, off:[...qcmSetup.off], t:qcmSetup.t});
+let qcmSetup = {n:10, mode:"all", off:[], t:0, fmt:"mix", ...S.qcm, srcOpen:false, pform:false};
+const saveSetup = () => { S.qcm = {n:qcmSetup.n, mode:qcmSetup.mode, off:[...qcmSetup.off], t:qcmSetup.t, fmt:qcmSetup.fmt}; save(); };
+const curCfg = () => ({themes:activeThemes(), n:qcmSetup.n, mode:qcmSetup.mode, off:[...qcmSetup.off], t:qcmSetup.t, fmt:qcmSetup.fmt});
 /* Référentiel d'une question : source citée en fin d'explication (variantes de nom regroupées) */
 const SRC_ALIAS = {"GTO Lutte contre les FDF et espaces naturels 2021":"GTO Lutte contre les feux de forêts et d'espaces naturels 2021", "GDO SSUAP 2022":"GDO Secours et soins d'urgence aux personnes 2022"};
 const NOSRC = "Notions générales (sans référentiel)";
-function srcOf(q){ const s = splitE(q.e).src; return s ? (SRC_ALIAS[s]||s) : NOSRC; }
+function srcOf(q){ if(q.mine) return MINE_SRC; const s = splitE(q.e).src; return s ? (SRC_ALIAS[s]||s) : NOSRC; }
 /* Clé « thème|référentiel » : on mémorise les référentiels décochés (tout est coché par défaut) */
 const srcKey = q => q.t+"|"+srcOf(q);
 function srcOptions(){
@@ -652,12 +842,40 @@ function srcOptions(){
     <div class="srclist">${blocks}
     ${offK.length?`<div><button type="button" class="btn" id="qsrc-clear">Tout recocher</button></div>`:""}</div></details>`;
 }
-function startQuiz(themes, n, mode, off, t){
+/* Formats : QCM, vrai/faux (une proposition à juger), texte à trous (les chiffres de la bonne réponse à compléter) */
+const NUMRE = /\d+(?:[.,]\d+)?/g;
+const NEGQ = /n.est pas|ne [^?]{0,30} pas|faux|sauf|incorrect|inexact/i;
+const nNums = o => (o.match(NUMRE)||[]).length;
+const canTxt = q => !/</.test(q.o[0]) && q.o[0].length <= 40 && nNums(q.o[0]) >= 1 && nNums(q.o[0]) <= 3 && !NEGQ.test(q.q);
+const canVf = q => !q.o.some(o => /toutes|aucune|les deux|tous les|ensemble des/i.test(o));
+const FMT = {mix:"Mélangé", qcm:"QCM seul", vf:"Vrai / faux", txt:"À compléter"};
+function fmtFor(q, f){
+  if(f==="qcm") return "qcm";
+  const v = canVf(q), x = canTxt(q);
+  if(f==="vf") return v ? "vf" : "qcm";
+  if(f==="txt") return x ? "txt" : "qcm";
+  const r = Math.random(); return x && r < .3 ? "txt" : v && r >= .7 ? "vf" : "qcm"; // mélangé : 30 % à compléter (si possible), 30 % vrai/faux, le reste en QCM
+}
+function mkItem(q, f){
+  const it = {q, order:shuffle(q.o.map((_,i)=>i)), fmt:fmtFor(q, f)};
+  if(it.fmt==="vf") it.s = Math.random() < .5 ? 0 : 1 + Math.floor(Math.random()*(q.o.length-1)); // proposition montrée : la bonne une fois sur deux
+  return it;
+}
+function trous(ans){
+  const parts = [], nums = []; let last = 0;
+  ans.replace(NUMRE, (m, i) => { parts.push(ans.slice(last, i)); nums.push(m); last = i + m.length; return m; });
+  parts.push(ans.slice(last)); return {parts, nums};
+}
+const numEq = (a, b) => { const x = String(a).trim().replace(/\s/g,"").replace(",","."), y = b.replace(",","."); return x !== "" && (x === y || (/^\d+(\.\d+)?$/.test(x) && parseFloat(x) === parseFloat(y))); };
+function startQuiz(themes, n, mode, off, t, fmt){
+  fmt = fmt || qcmSetup.fmt || "mix";
   let pool = visQ().filter(q=> themes.includes(q.t) && !(off||[]).includes(srcKey(q)));
+  if(mode!=="day"){ if(fmt==="vf") pool = pool.filter(canVf); if(fmt==="txt") pool = pool.filter(canTxt); }
   if(mode==="err") pool = pool.filter(q=>S.qp[q.id]&&!S.qp[q.id].ok);
   if(mode==="new") pool = pool.filter(q=>!S.qp[q.id]);
   if(mode==="due") pool = pool.filter(q=>isDue(S.qp[q.id]));
   if(mode==="fav") pool = pool.filter(q=>isFav(q.id));
+  if(mode==="mine") pool = pool.filter(q=>q.mine);
   if(mode==="weak"){ // points faibles : erreurs d'abord, puis les boîtes basses et les taux de réussite faibles
     const sc = q => { const p = S.qp[q.id]; return p ? (p.ok?10:0) + boxOf(p) + p.c/p.n : 5.5; };
     pool = shuffle(pool).sort((a,b)=>sc(a)-sc(b)).slice(0,n);
@@ -670,7 +888,7 @@ function startQuiz(themes, n, mode, off, t){
     pool = shuffle([...d, ...f, ...dueAll.slice(d.length, d.length + n - d.length - f.length)]);
   }
   pool = shuffle(pool).slice(0,n);
-  quiz = pool.length ? {items:pool.map(q=>({q, order:shuffle(q.o.map((_,i)=>i))})), i:0, picked:null, score:0, wrong:[], t:t||0} : {empty:true};
+  quiz = pool.length ? {items:pool.map(q=>mkItem(q, fmt)), i:0, picked:null, score:0, wrong:[], t:t||0} : {empty:true};
   if(mode==="sd" && !quiz.empty){ quiz.sd = sdKey(themes); quiz.rec0 = S.sd[quiz.sd]||0; }
 }
 /* Record de mort subite : par thème quand un seul thème est choisi, sinon par groupe de thèmes */
@@ -705,10 +923,14 @@ function vQcm(){
       <span class="label">Référentiels (GTO / GDO) — décoche ceux à exclure</span>
       ${srcOptions()}
       <span class="label">Questions</span>
-      <div class="chips" id="qm">${[["all","Toutes"],["due",`À revoir aujourd'hui (${nDue})`],["new","Jamais vues"],["err","Mes erreurs"],["fav",`★ Mes favoris (${nFav})`],["sd","Mort subite"]].map(([k,v])=>`<button type="button" class="chip" data-m="${k}" aria-pressed="${qcmSetup.mode===k}">${v}</button>`).join("")}</div>
+      <div class="chips" id="qm">${[["all","Toutes"],["due",`À revoir aujourd'hui (${nDue})`],["new","Jamais vues"],["err","Mes erreurs"],["fav",`★ Mes favoris (${nFav})`],...(mineList().length?[["mine",`✎ Mes questions (${mineList().length})`]]:[]),["sd","Mort subite"]].map(([k,v])=>`<button type="button" class="chip" data-m="${k}" aria-pressed="${qcmSetup.mode===k}">${v}</button>`).join("")}</div>
       ${qcmSetup.mode==="sd" ? `<p class="muted" style="font-size:.9rem">Les questions s'enchaînent jusqu'à la première erreur. Record actuel pour ces thèmes : <b class="num">${S.sd[sdKey(activeThemes())]||0}</b>.</p>`
       : `<span class="label">Nombre de questions</span>
       <div class="chips" id="qn">${[10,20,999].map(n=>`<button type="button" class="chip" data-n="${n}" aria-pressed="${qcmSetup.n===n}">${n===999?"Toutes":n}</button>`).join("")}</div>`}
+      <p class="muted" style="font-size:.9rem"><a href="#mesq">✎ Ajouter mes propres questions</a> : elles entrent dans les quiz de leur thème.</p>
+      <span class="label">Format des questions</span>
+      <div class="chips" id="qf">${Object.entries(FMT).map(([k,v])=>`<button type="button" class="chip" data-f="${k}" aria-pressed="${(qcmSetup.fmt||"mix")===k}">${v}</button>`).join("")}</div>
+      <p class="muted" style="font-size:.9rem">${{mix:"QCM, vrai / faux et textes à trous mélangés : on retient mieux en changeant de forme.", qcm:"Quatre propositions, une seule bonne.", vf:"Une seule proposition : tu dis si c'est la bonne réponse ou non.", txt:"La bonne réponse s'affiche avec des trous à la place des chiffres (durées, distances, pressions…) : à toi de les retrouver."}[qcmSetup.fmt||"mix"]}</p>
       <span class="label">Chrono par question</span>
       <div class="chips" id="qt">${[[0,"Sans"],[15,"15 s"],[30,"30 s"],[60,"60 s"]].map(([k,v])=>`<button type="button" class="chip" data-tm="${k}" aria-pressed="${(qcmSetup.t||0)===k}">${v}</button>`).join("")}</div>
       ${qcmSetup.t?`<p class="muted" style="font-size:.9rem">Mode vitesse : une réponse non donnée à temps compte comme une erreur. Le chrono se met en pause si tu quittes l'appli.</p>`:""}
@@ -739,11 +961,21 @@ function vQcm(){
     ${quiz.log&&quiz.log.length?corrList(quiz.log,"Correction détaillée"):""}`;
   }
   const it = quiz.items[quiz.i], q = it.q, n = quiz.items.length, done = quiz.picked!==null;
-  const opts = it.order.map((oi,k) => {
+  const fmt = it.fmt || "qcm";
+  let body;
+  if(fmt==="vf"){
+    const truth = it.s===0 ? 1 : 0;
+    const vb = (v, lab, k) => { let cls = "opt"; if(done){ if(v===truth) cls+=" right"; else if(v===it.v) cls+=" wrong"; } return `<button type="button" class="${cls}" data-vf="${v}" ${done?"disabled":""}><kbd>${k}</kbd><span>${lab}</span></button>`; };
+    body = `<div class="vfprop"><span class="label">Vrai ou faux · cette proposition est-elle la bonne réponse ?</span><p>${q.o[it.s]}</p></div><div class="opts vf">${vb(1,"Vrai, c'est la bonne réponse",1)}${vb(0,"Faux",2)}</div>`;
+  } else if(fmt==="txt"){
+    const T = trous(q.o[0]), vals = it.vals || [];
+    const hole = i => `<input class="field hole ${done ? (numEq(vals[i]||"", T.nums[i]) ? "ok" : "bad") : ""}" data-h="${i}" inputmode="decimal" autocomplete="off" enterkeyhint="done" style="width:${Math.max(3, T.nums[i].length + 2)}ch" aria-label="Valeur ${i+1} sur ${T.nums.length}" value="${done ? esc(vals[i]||"") : ""}" ${done?"disabled":""}>`;
+    body = `<form class="trous" id="qtxt"><span class="label">À compléter · retrouve ${T.nums.length>1?"les valeurs":"la valeur"}</span><p class="tline-q">${T.parts.map((p,i) => p + (i < T.nums.length ? hole(i) : "")).join("")}</p>${done ? "" : `<div class="row"><button class="btn primary">Valider</button><span class="muted kbd-hint" style="font-size:.85rem">Entrée pour valider</span></div>`}</form>`;
+  } else body = `<div class="opts">${it.order.map((oi,k) => {
     let cls = "opt";
     if(done){ if(oi===0) cls+=" right"; else if(oi===quiz.picked) cls+=" wrong"; }
     return `<button type="button" class="${cls}" data-oi="${oi}" ${done?"disabled":""}><kbd>${k+1}</kbd><span>${q.o[oi]}</span></button>`;
-  }).join("");
+  }).join("")}</div>`;
   const good = quiz.picked===0, timeout = quiz.picked===-1, fav = isFav(q.id);
   const reported = S.rep.some(r=>r.id===q.id);
   const count = quiz.sd ? `série ${quiz.score} · record ${Math.max(quiz.rec0, quiz.score)}` : `${quiz.i+1} / ${n} · ${quiz.score} juste${quiz.score>1?"s":""}`;
@@ -753,12 +985,12 @@ function vQcm(){
     ${quiz.t && !done ? `<div class="qtime"><div class="qtimer"><i id="qtbar" style="width:${100*(quiz.qLeft==null?1:quiz.qLeft/(quiz.t*1000))}%"></i></div><span class="num" id="qtsec">${Math.ceil((quiz.qLeft==null?quiz.t*1000:quiz.qLeft)/1000)} s</span></div>` : ""}
     ${done ? "" : srsTag(q)}
     <p class="question">${q.q}</p>
-    <div class="opts">${opts}</div>
-    ${done?`<div class="explain ${good?"":"no"}" role="status"><b>${good?"✓ Bonne réponse":timeout?"⏱ Temps écoulé":"✗ Mauvaise réponse"}</b>${good?"":`${timeout?"":`<p class="ans">Ta réponse : ${q.o[quiz.picked]}</p>`}<p class="ans ok">Bonne réponse : ${q.o[0]}</p>`}${explainBody(q)}</div>
+    ${body}
+    ${done?`<div class="explain ${good?"":"no"}" role="status"><b>${good?"✓ Bonne réponse":timeout?"⏱ Temps écoulé":"✗ Mauvaise réponse"}</b>${good?"":`${timeout?"":`<p class="ans">Ta réponse : ${it.as || q.o[quiz.picked]}</p>`}<p class="ans ok">Bonne réponse : ${q.o[0]}</p>`}${explainBody(q)}${!good && !timeout && fmt==="txt" && !quiz.sd ? `<p><button type="button" class="btn" id="qforce">J'avais juste (mal tapé)</button></p>` : ""}</div>
     ${good?`<div class="conf"><span>Tu étais :</span><div class="chips" id="qconf"><button type="button" class="chip" data-c="sur" aria-pressed="${it.conf!=="hes"}">Sûr</button><button type="button" class="chip" data-c="hes" aria-pressed="${it.conf==="hes"}">Hésitant <kbd class="kbd-hint">H</kbd></button></div></div>`:""}
     <p class="srs muted">${srsNext(q, it)}</p>
     <div class="row"><button type="button" class="btn primary" id="qnext">${quiz.i+1<n?"Question suivante":"Voir le résultat"}</button><span class="muted kbd-hint" style="font-size:.85rem">Entrée ou Espace</span></div>`
-    :`<p class="muted kbd-hint" style="font-size:.85rem">Touches 1 à 4 ou A à D pour répondre · F favori · S signaler</p>`}
+    :`<p class="muted kbd-hint" style="font-size:.85rem">${fmt==="vf" ? "Touche 1 = vrai, 2 = faux" : fmt==="txt" ? "Tape les chiffres puis Entrée" : "Touches 1 à 4 ou A à D pour répondre"} · F favori · S signaler</p>`}
     <div class="qtools">
       <button type="button" class="btn" id="qfav" aria-pressed="${fav}" title="Mettre en favori (touche F)">${fav?"★ En favori":"☆ Favori"}</button>
       <button type="button" class="btn" id="qrep" ${quiz.repOpen?'aria-expanded="true"':""} title="Signaler une erreur ou un doute (touche S)">${reported?"⚑ Signalée":"⚑ Signaler"}</button>
@@ -797,19 +1029,41 @@ function explainBody(q){
 /* Correction détaillée : erreurs d'abord, bonnes réponses repliées */
 function corrList(items, title){
   const bad = items.filter(it=>it.a!==0), good = items.filter(it=>it.a===0);
-  const li = it => `<li><p>${badge(it.q.t)} ${it.q.q}</p>${it.a===0?"":`<p class="yours">${it.a===null||it.a===undefined?"Sans réponse":"Ta réponse : "+it.q.o[it.a]}</p>`}<p>${it.a===0?"✓ ":""}${it.q.o[0]}</p>${explainBody(it.q)}</li>`;
+  const li = it => `<li><p>${badge(it.q.t)} ${it.q.q}</p>${it.a===0?"":`<p class="yours">${it.a===null||it.a===undefined?"Sans réponse":"Ta réponse : "+(it.as||it.q.o[it.a])}</p>`}<p>${it.a===0?"✓ ":""}${it.q.o[0]}</p>${explainBody(it.q)}</li>`;
   return `<section style="display:grid;gap:10px"><h3>${title}</h3>
     ${bad.length?`<p class="muted">${bad.length} erreur${bad.length>1?"s":""} à retenir :</p><ul class="errlist">${bad.map(li).join("")}</ul>`:`<p class="muted">Aucune erreur.</p>`}
     ${good.length?`<details class="fiche corr"><summary>Revoir les ${good.length} bonne${good.length>1?"s":""} réponse${good.length>1?"s":""} et leur explication</summary><ul class="errlist">${good.map(li).join("")}</ul></details>`:""}
   </section>`;
 }
-function pick(oi){
+/* Réponse donnée (tous formats). picked : indice choisi en QCM, 0 = juste, -1 = temps écoulé, -2 = faux en vrai/faux ou à compléter */
+function pick(oi){ settle(oi, oi===0, null); }
+function pickVf(v){
+  if(!quiz||quiz.picked!==null||quiz.i>=quiz.items.length) return;
+  const it = quiz.items[quiz.i], ok = (v===1) === (it.s===0); it.v = v;
+  settle(ok ? 0 : -2, ok, v ? `Vrai (« ${it.q.o[it.s]} » serait la bonne réponse)` : `Faux (« ${it.q.o[it.s]} » ne serait pas la bonne réponse)`);
+}
+function pickTxt(vals){
+  if(!quiz||quiz.picked!==null||quiz.i>=quiz.items.length) return;
+  const it = quiz.items[quiz.i], T = trous(it.q.o[0]); it.vals = vals;
+  const ok = T.nums.every((n,i) => numEq(vals[i]||"", n));
+  settle(ok ? 0 : -2, ok, T.parts.map((p,i) => p + (i < T.nums.length ? `<b>${esc(vals[i]||"…")}</b>` : "")).join(""));
+}
+/* Texte à trous compté faux à cause d'une faute de frappe : on rectifie */
+function countOk(){
+  if(!quiz || quiz.picked!==-2 || quiz.sd) return;
+  const it = quiz.items[quiz.i], q = it.q, p = S.qp[q.id]; if(it.fmt!=="txt" || !p) return;
+  S.qp[q.id] = {...p, ok:true, c:(p.c||0)+1, ...sched(it.prev, true)};
+  quiz.picked = 0; quiz.score++; quiz.wrong = quiz.wrong.filter(x => x!==q);
+  const l = quiz.log[quiz.log.length-1]; if(l){ l.a = 0; l.as = null; }
+  save(); render();
+}
+function settle(picked, ok, as){
   if(!quiz||quiz.picked!==null||quiz.i>=quiz.items.length) return;
   if(qTimer){ clearInterval(qTimer); qTimer = null; }
   quiz.qEnd = null; quiz.qLeft = null;
-  const it = quiz.items[quiz.i], q = it.q; quiz.picked = oi;
+  const it = quiz.items[quiz.i], q = it.q; quiz.picked = picked; it.as = ok ? null : as;
   it.prev = S.qp[q.id] ? {...S.qp[q.id]} : null; it.conf = "sur";
-  const ok = oi===0; recordQ(q, ok); (quiz.log=quiz.log||[]).push({q, a: oi===-1 ? null : oi});
+  recordQ(q, ok); (quiz.log=quiz.log||[]).push({q, a: picked===-1 ? null : ok ? 0 : picked, as: it.as});
   if(ok) quiz.score++; else quiz.wrong.push(q);
   if(quiz.sd){
     if(quiz.score > (S.sd[quiz.sd]||0)) S.sd[quiz.sd] = quiz.score;
@@ -837,6 +1091,7 @@ function bindQcm(){
   bindChips(render);
   const qn=$("#qn"); if(qn) qn.onclick=e=>{const b=e.target.closest("[data-n]"); if(b){qcmSetup.n=+b.dataset.n; saveSetup(); render();}};
   const qm=$("#qm"); if(qm) qm.onclick=e=>{const b=e.target.closest("[data-m]"); if(b){qcmSetup.mode=b.dataset.m; saveSetup(); render();}};
+  const qf=$("#qf"); if(qf) qf.onclick=e=>{const b=e.target.closest("[data-f]"); if(b){qcmSetup.fmt=b.dataset.f; saveSetup(); render();}};
   const qt=$("#qt"); if(qt) qt.onclick=e=>{const b=e.target.closest("[data-tm]"); if(b){qcmSetup.t=+b.dataset.tm; saveSetup(); render();}};
   const fv=$("#qfav"); if(fv) fv.onclick=toggleFav;
   const rp=$("#qrep"); if(rp) rp.onclick=openRep;
@@ -871,7 +1126,14 @@ function bindQcm(){
   const pc=$("#pcancel"); if(pc) pc.onclick=()=>{ qcmSetup.pform=false; render(); };
   document.querySelectorAll("[data-p]").forEach(b=>b.onclick=()=>launch(S.presets[+b.dataset.p]));
   document.querySelectorAll("[data-pdel]").forEach(b=>b.onclick=()=>{ S.presets.splice(+b.dataset.pdel,1); save(); render(); });
-  document.querySelectorAll(".opt").forEach(b=>b.onclick=()=>pick(+b.dataset.oi));
+  document.querySelectorAll(".opt[data-oi]").forEach(b=>b.onclick=()=>pick(+b.dataset.oi));
+  document.querySelectorAll(".opt[data-vf]").forEach(b=>b.onclick=()=>pickVf(+b.dataset.vf));
+  const tx=$("#qtxt"); if(tx && quiz && quiz.picked===null){
+    tx.onsubmit=e=>{ e.preventDefault(); const hs=[...tx.querySelectorAll(".hole")], vals=hs.map(i=>i.value);
+      const empty=hs.find(i=>!i.value.trim()); if(empty){ empty.focus(); return; } pickTxt(vals); };
+    const h=tx.querySelector(".hole"); if(h) h.focus({preventScroll:true});
+  }
+  const fc=$("#qforce"); if(fc) fc.onclick=countOk;
   const nx=$("#qnext"); if(nx){ nx.onclick=next; nx.focus({preventScroll:true}); }
   const st=$("#qstop"); if(st) st.onclick=()=>{ quiz=null; render(); };
   const bk=$("#qback"); if(bk) bk.onclick=()=>{ quiz=null; render(); };
@@ -1093,9 +1355,11 @@ function render(){
 /* Sessions en cours gardées sur l'appareil (départ en intervention, appli fermée…) puis retrouvées à la réouverture.
    L'examen blanc garde son temps restant : le chrono est en pause tant que l'appli est fermée. */
 const QBY = new Map(ALLQ.map(q=>[q.id,q])), FBY = new Map(ALLF.map(f=>[f.id,f]));
+ROUTES.mesq = "Mes questions"; VIEWS.mesq = [vMesq, bindMesq]; VIEWS.oral = [vOral, bindOral];
+injectMine();
 function saveRun(){
   const r = {};
-  if(quizRunning()) r.quiz = {items:quiz.items.map(it=>[it.q.id,it.order]), i:quiz.i, picked:quiz.picked, score:quiz.score, wrong:quiz.wrong.map(q=>q.id), log:(quiz.log||[]).map(x=>[x.q.id,x.a]), t:quiz.t||0, sd:quiz.sd||"", rec0:quiz.rec0||0};
+  if(quizRunning()) r.quiz = {items:quiz.items.map(it=>[it.q.id,it.order,it.fmt||"qcm",it.s??null,it.v??null,it.vals||null,it.as||null]), i:quiz.i, picked:quiz.picked, score:quiz.score, wrong:quiz.wrong.map(q=>q.id), log:(quiz.log||[]).map(x=>[x.q.id,x.a,x.as||null]), t:quiz.t||0, sd:quiz.sd||"", rec0:quiz.rec0||0};
   if(deck && deck.i < deck.items.length) r.deck = {ids:deck.items.map(c=>c.id), i:deck.i, flip:deck.flip, known:deck.known};
   if(casRun && casRun.i < casRun.c.steps.length) r.cas = {id:casRun.c.id, i:casRun.i, picked:casRun.picked, score:casRun.score, order:casRun.order};
   if(exam && !exam.done) r.exam = {items:exam.items.map(it=>[it.q.id,it.order,it.a]), i:exam.i, left:exam.end-Date.now(), min:exam.min};
@@ -1105,9 +1369,9 @@ function restoreRun(){
   const r = LS.get("run", {}) || {};
   try{
     if(r.quiz){
-      const items = r.quiz.items.map(([id,order])=>({q:QBY.get(id), order}));
+      const items = r.quiz.items.map(([id,order,fmt,s,v,vals,as])=>({q:QBY.get(id), order, fmt:fmt||"qcm", s:s??undefined, v:v??undefined, vals:vals||undefined, as:as||null}));
       if(items.every(it=>it.q) && r.quiz.i < items.length) quiz = {items, i:r.quiz.i, picked:r.quiz.picked, score:r.quiz.score,
-        wrong:r.quiz.wrong.map(id=>QBY.get(id)).filter(Boolean), log:r.quiz.log.map(([id,a])=>({q:QBY.get(id), a})).filter(x=>x.q), t:r.quiz.t||0, sd:r.quiz.sd||undefined, rec0:r.quiz.rec0||0};
+        wrong:r.quiz.wrong.map(id=>QBY.get(id)).filter(Boolean), log:r.quiz.log.map(([id,a,as])=>({q:QBY.get(id), a, as})).filter(x=>x.q), t:r.quiz.t||0, sd:r.quiz.sd||undefined, rec0:r.quiz.rec0||0};
     }
     if(r.deck){ const items = r.deck.ids.map(id=>FBY.get(id)); if(items.every(Boolean)) deck = {items, i:r.deck.i, flip:r.deck.flip, known:r.deck.known}; }
     if(r.cas){ const c = CAS.find(x=>x.id===r.cas.id); if(c) casRun = {c, i:r.cas.i, picked:r.cas.picked, score:r.cas.score, order:r.cas.order}; }
@@ -1131,7 +1395,7 @@ document.addEventListener("keydown", e => {
   if(r==="qcm" && quiz && !quiz.empty && quiz.i<quiz.items.length){
     const it=quiz.items[quiz.i], key=e.key.toLowerCase();
     if(e.key==="Escape" && quiz.repOpen){ quiz.repOpen=false; render(); }
-    else if(kx>=0 && quiz.picked===null){ if(kx<it.order.length){ e.preventDefault(); pick(it.order[kx]); } }
+    else if(kx>=0 && quiz.picked===null){ const f=it.fmt||"qcm"; if(f==="vf"){ if(kx<2){ e.preventDefault(); pickVf(kx===0?1:0); } } else if(f==="qcm" && kx<it.order.length){ e.preventDefault(); pick(it.order[kx]); } }
     else if((e.key==="Enter" || e.key===" ") && quiz.picked!==null){ e.preventDefault(); next(); }
     else if(key==="f"){ e.preventDefault(); toggleFav(); }
     else if(key==="s"){ e.preventDefault(); openRep(); }

@@ -396,4 +396,33 @@ a.btn{color:inherit}
   .spill{min-width:48px;padding:0 7px}
 }
 .tabs{flex-wrap:wrap;row-gap:0}
-.tabs a{padding-inline:9px;font-size:1.02rem}
+.tabs a{padding-inline:7px;font-size:.98rem}
+
+/* ---------- Phase 5 : vrai/faux, textes à trous ---------- */
+.vfprop{display:grid;gap:6px;padding:14px 16px;border:2px dashed var(--line);border-radius:10px;background:var(--surface)}
+.vfprop p{margin:0;font-size:1.1rem;font-weight:700}
+.opts.vf{grid-template-columns:1fr 1fr}
+.trous{display:grid;gap:10px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.trous p{margin:0;font-size:1.2rem;font-weight:700;line-height:2.2}
+.hole{display:inline-block;padding:4px 6px;margin:0 3px;text-align:center;font:inherit;font-family:var(--mono);min-height:0;vertical-align:baseline}
+.hole.ok{border-color:var(--ok);background:var(--ok-soft)}
+.hole.bad{border-color:var(--bad);background:var(--bad-soft);text-decoration:line-through}
+.explain .ans b,.yours b{display:inline;margin:0;text-decoration:underline}
+
+/* ---------- Phase 5 : oral ---------- */
+.ochips{display:grid;grid-template-columns:7.5em minmax(0,1fr);gap:8px;align-items:center}
+.ochips > span{font-weight:600}
+@media (max-width:560px){.ochips{grid-template-columns:1fr}}
+.oq{gap:14px}
+.oq-q{margin:0;font-family:var(--display);font-size:1.5rem;line-height:1.2;text-wrap:balance}
+.ochr{display:grid;gap:6px;justify-items:start}
+.ochr b{font-size:2.8rem;line-height:1;font-family:var(--mono)}
+.ochr b.warn{color:var(--bad)}
+.ochr .bar{width:100%}
+.ochr .bar i{background:var(--red)}
+.omethod summary{cursor:pointer;font-weight:700}
+.omethod p{margin:8px 0 0}
+.ocrit{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.ocrit > div:first-child{display:grid;gap:2px;min-width:0}
+.ocrit small{color:var(--muted);font-size:.85rem}
+.ocrit .chip{min-width:2.6em;justify-content:center}

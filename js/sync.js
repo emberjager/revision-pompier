@@ -30,15 +30,20 @@ function mergeData(remote){
   if(Array.isArray(remote.themes) && remote.themes.length) S.themes = withNewThemes(remote.themes, remote.thk || OLD_TH);
   // Réglages ajoutés en phase 1 : date du concours, réglages QCM, dernier quiz, favoris (réunis par nom).
   if(typeof remote.concours === "string") S.concours = remote.concours;
-  if(remote.qcm && typeof remote.qcm === "object"){ S.qcm = {...S.qcm, ...remote.qcm}; Object.assign(qcmSetup, {n:S.qcm.n, mode:S.qcm.mode, off:[...(S.qcm.off||[])], t:S.qcm.t||0}); }
+  if(remote.qcm && typeof remote.qcm === "object"){ S.qcm = {...S.qcm, ...remote.qcm}; Object.assign(qcmSetup, {n:S.qcm.n, mode:S.qcm.mode, off:[...(S.qcm.off||[])], t:S.qcm.t||0, fmt:S.qcm.fmt||"mix"}); }
   if(remote.last && (!S.last || (remote.last.at||0) > (S.last.at||0))) S.last = remote.last;
   // Phase 2 : questions favorites (le geste le plus récent gagne, ajout ou retrait) et records de mort subite.
   if(remote.fav && typeof remote.fav === "object") for(const [id,v] of Object.entries(remote.fav)) if(Math.abs(v) > Math.abs(S.fav[id]||0)) S.fav[id] = v;
   if(remote.sd && typeof remote.sd === "object") for(const [k,v] of Object.entries(remote.sd)) S.sd[k] = Math.max(S.sd[k]||0, v);
+  // Mes questions : la version la plus récente de chaque question gagne (ajout, modification ou suppression).
+  if(remote.mine && typeof remote.mine === "object"){ for(const [id,m] of Object.entries(remote.mine)) if(m && (m.at||0) > ((S.mine[id]||{}).at||0)) S.mine[id] = m; injectMine(); }
+  // Oraux d'entraînement : réunion par date.
+  if(Array.isArray(remote.oral)){ const seen = new Set(S.oral.map(o=>o.at)); S.oral = [...S.oral, ...remote.oral.filter(o=>o && Array.isArray(o.sc) && !seen.has(o.at))].sort((a,b)=>a.at-b.at).slice(-100); }
+  if(remote.oralT && typeof remote.oralT === "object") S.oralT = remote.oralT;
   if(typeof remote.lb === "number" && Math.abs(remote.lb) > Math.abs(S.lb||0)) S.lb = remote.lb;
   if(Array.isArray(remote.presets)){ const names = new Set(S.presets.map(p=>p.name)); S.presets = [...S.presets, ...remote.presets.filter(p=>p && !names.has(p.name))].slice(-8); }
 }
-const payload = () => ({obj:S.obj, themes:S.themes, qp:S.qp, fp:S.fp, cp:S.cp, fs:S.fs, days:S.days, goal:S.goal, ex:S.ex, thk:Object.keys(TH), concours:S.concours, qcm:S.qcm, last:S.last, presets:S.presets, fav:S.fav, sd:S.sd, lb:S.lb});
+const payload = () => ({obj:S.obj, themes:S.themes, qp:S.qp, fp:S.fp, cp:S.cp, fs:S.fs, days:S.days, goal:S.goal, ex:S.ex, thk:Object.keys(TH), concours:S.concours, qcm:S.qcm, last:S.last, presets:S.presets, fav:S.fav, sd:S.sd, lb:S.lb, mine:S.mine, oral:S.oral, oralT:S.oralT});
 
 let pushTimer = null, applying = false;
 async function push(){

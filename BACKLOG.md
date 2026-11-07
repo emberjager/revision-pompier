@@ -49,12 +49,12 @@ Légende : ☐ à faire · ◐ en cours · ☑ fait · 🎨 choix visuel à vali
 - ☑ **M4. Rappel quotidien** (fait le 2026-11-07) : Réglages > Rappel quotidien (heure 8/12/18/20 h, bouton « Tester »). Le service worker notifie « N questions à revoir » si l'objectif du jour n'est pas atteint. Limite : rappel automatique seulement sur Chrome/Edge Android avec l'appli installée (synchro périodique) ; le navigateur choisit le moment exact après l'heure demandée. Ailleurs (iPhone, PC), seul le test fonctionne : il faudrait un serveur d'envoi (Web Push) pour aller plus loin.
 
 ## Phase 5 — Contenu
-- ☐ **C1. Préparation à l'oral** : questions de jury types, chrono de présentation, éléments de réponse modèles et grille d'auto-évaluation.
-- ☐ **C2. Sport** ❓ : carnet de performances et calcul de la note. Les barèmes officiels sont à fournir par l'utilisateur (dossier `cours/sport`).
-- ☐ **C3. Vrai/faux et textes à trous** : nouveaux formats de question, mélangés aux QCM.
-- ☐ **C4. Fiches plus riches** : schémas, tableaux, lien « questions associées ». Les fiches et cartes ne sont pas encore testées par l'utilisateur : ne pas les refondre avant son retour.
-- ☐ **C5. Suite des lots de questions** : viser 100 et plus par thème. Au lot 8 : SUAP 84, FDF 88, SR 93. OCR du GTO périlleux/montagne à faire.
-- ☐ **C6. Formulaire d'ajout de question dans le site** : prévu dans la feuille de route initiale.
+- ☑ **C1. Préparation à l'oral** : page #oral (2026-11-07). 43 questions de jury en 7 catégories avec méthode de réponse, chrono préparation + exposé (pause hors écran), grille d'auto-évaluation sur 5 critères (note /20), historique synchronisé (S.oral, S.oralT).
+- ⏸ **C2. Sport** ❓ (bloqué : barèmes à fournir) : carnet de performances et calcul de la note. Les barèmes officiels sont à fournir par l'utilisateur (dossier `cours/sport`).
+- ☑ **C3. Vrai/faux et textes à trous** : choix « Format des questions » dans le QCM (QCM, vrai/faux, à compléter, mélange). Le texte à trous ne porte que sur les réponses chiffrées ; bouton « J'avais juste (mal tapé) ».
+- ⏸ **C4. Fiches plus riches** (en attente du retour de l'utilisateur) : schémas, tableaux, lien « questions associées ». Les fiches et cartes ne sont pas encore testées par l'utilisateur : ne pas les refondre avant son retour.
+- ☑ **C5. Suite des lots de questions** : lot 9 (2026-11-07) : SUAP 104, FDF 110, SR 117, 639 au total. À poursuivre : com, cult, fr, math, et OCR du GTO périlleux/montagne.
+- ☑ **C6. Formulaire d'ajout de question dans le site** : page #mesq « Mes questions » (ajout, modification, suppression, synchro avec le compte, mode QCM « Mes questions »).
 
 ## Phase T — Technique (en parallèle)
 - ☐ **T1. Chargement plus rapide** :
