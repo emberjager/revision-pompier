@@ -35,9 +35,10 @@ function mergeData(remote){
   // Phase 2 : questions favorites (le geste le plus récent gagne, ajout ou retrait) et records de mort subite.
   if(remote.fav && typeof remote.fav === "object") for(const [id,v] of Object.entries(remote.fav)) if(Math.abs(v) > Math.abs(S.fav[id]||0)) S.fav[id] = v;
   if(remote.sd && typeof remote.sd === "object") for(const [k,v] of Object.entries(remote.sd)) S.sd[k] = Math.max(S.sd[k]||0, v);
+  if(typeof remote.lb === "number" && Math.abs(remote.lb) > Math.abs(S.lb||0)) S.lb = remote.lb;
   if(Array.isArray(remote.presets)){ const names = new Set(S.presets.map(p=>p.name)); S.presets = [...S.presets, ...remote.presets.filter(p=>p && !names.has(p.name))].slice(-8); }
 }
-const payload = () => ({obj:S.obj, themes:S.themes, qp:S.qp, fp:S.fp, cp:S.cp, fs:S.fs, days:S.days, goal:S.goal, ex:S.ex, thk:Object.keys(TH), concours:S.concours, qcm:S.qcm, last:S.last, presets:S.presets, fav:S.fav, sd:S.sd});
+const payload = () => ({obj:S.obj, themes:S.themes, qp:S.qp, fp:S.fp, cp:S.cp, fs:S.fs, days:S.days, goal:S.goal, ex:S.ex, thk:Object.keys(TH), concours:S.concours, qcm:S.qcm, last:S.last, presets:S.presets, fav:S.fav, sd:S.sd, lb:S.lb});
 
 let pushTimer = null, applying = false;
 async function push(){
@@ -45,6 +46,7 @@ async function push(){
   const {error} = await SB.from("progress").upsert({user_id:acct.user.id, data:payload(), updated_at:new Date().toISOString()});
   acct.status = error ? "Échec de l'envoi : " + error.message : "";
   if(!error) acct.lastSync = new Date();
+  if(!error) pushScore();
   if(route()==="compte") render();
 }
 // Après une remise à zéro, on écrase tout de suite la copie en ligne (sinon la fusion ramènerait les anciens résultats).
@@ -106,7 +108,7 @@ function vCompte(){
     <section style="display:grid;gap:8px"><span class="label">Compte</span><h2>${escHtml(acct.pseudo || "Mon compte")}</h2>
     <p class="lead">Connecté avec ${escHtml(acct.user.email)}. Ta progression est synchronisée automatiquement entre tes appareils.</p></section>
     <form class="panel" id="prof">
-      <label class="label" for="pseudo">Pseudo (affiché plus tard dans le classement du CIS)</label>
+      <label class="label" for="pseudo">Pseudo (affiché dans le <a href="#classement">classement du CIS</a> si tu y participes)</label>
       <input id="pseudo" class="field" maxlength="30" value="${escHtml(acct.pseudo)}" placeholder="Ex. Cpl Martin">
       <div><button class="btn" type="submit">Enregistrer le pseudo</button></div>
     </form>
@@ -175,6 +177,72 @@ function bindCompte(){
   const sn = $("#syncnow"); if(sn) sn.onclick = pull;
   const lo = $("#logout"); if(lo) lo.onclick = () => SB.auth.signOut();
 }
+
+/* ---------- Classement du CIS (table « scores », participation volontaire avec son pseudo) ---------- */
+// S.lb : date d'inscription (> 0) ou de départ (< 0), fusionnée entre appareils comme les favoris.
+const lb = {rows:null, err:"", at:0, tab:"week", busy:false, gone:false};
+const inLb = () => (S.lb||0) > 0;
+function scoreRow(){
+  const pt = points(), gr = gradeOf(pt.total);
+  return {user_id:acct.user.id, pseudo:acct.pseudo, points:pt.total, grade:gr.g.n, week:mondayOf(today()), week_ans:weekAns(), streak:streak(), updated_at:new Date().toISOString()};
+}
+async function pushScore(){
+  if(!SB || !acct.user) return;
+  if(inLb() && acct.pseudo){
+    const {error} = await SB.from("scores").upsert(scoreRow());
+    lb.err = error ? lbError(error) : ""; lb.gone = false;
+  } else if((S.lb||0) < 0 && !lb.gone){
+    const {error} = await SB.from("scores").delete().eq("user_id", acct.user.id);
+    if(!error) lb.gone = true;
+  }
+}
+const lbError = e => /relation|does not exist|schema cache|not find the table/i.test(e.message) ? "Le classement n'est pas encore activé : la table « scores » manque dans Supabase (voir supabase/schema.sql)." : "Classement indisponible : " + e.message;
+async function loadLb(){
+  if(!SB || !acct.user || lb.busy) return;
+  lb.busy = true;
+  await pushScore();
+  const {data, error} = await SB.from("scores").select("user_id,pseudo,points,grade,week,week_ans,streak").limit(200);
+  lb.busy = false; lb.at = Date.now();
+  if(error){ lb.err = lbError(error); lb.rows = null; } else { lb.err = ""; lb.rows = data || []; }
+  if(route()==="classement") render();
+}
+function vClassement(){
+  const head = `<section style="display:grid;gap:8px"><span class="label">Motivation</span><h2>Classement du CIS</h2>
+    <p class="lead">Entre collègues, pour se motiver : les réponses de la semaine et le grade de chacun.</p></section>`;
+  if(!SB) return head + `<div class="panel"><p class="muted">Pas de connexion pour l'instant : le classement s'affichera quand le réseau reviendra.</p></div>`;
+  if(!acct.user) return head + `<div class="panel"><p>Connecte-toi pour voir le classement et y participer.</p><div><a class="btn primary" href="#compte">Se connecter</a></div></div>`;
+  if(!inLb()) return head + `<form class="panel" id="lbjoin">
+      <p>Tu n'apparais pas encore dans le classement. Les autres participants verront ton <b>pseudo</b>, ton grade, ta série et ton nombre de réponses de la semaine. Rien d'autre (ni e-mail, ni détail de tes résultats).</p>
+      <label class="label" for="lbp">Pseudo affiché (prénom, surnom…)</label>
+      <input id="lbp" class="field" maxlength="30" required value="${escHtml(acct.pseudo)}" placeholder="Ex. Cpl Martin">
+      <div><button class="btn primary" type="submit">Participer au classement</button></div>
+      ${lb.err?`<p class="explain no">${escHtml(lb.err)}</p>`:""}</form>`;
+  if(!lb.rows && !lb.err) return head + `<div class="panel"><p class="muted">Chargement du classement…</p></div>`;
+  if(lb.err) return head + `<div class="panel"><p class="explain no">${escHtml(lb.err)}</p><div class="row"><button type="button" class="btn" id="lbre">Réessayer</button><button type="button" class="btn" id="lbquit">Quitter le classement</button></div></div>`;
+  const mon = mondayOf(today());
+  const val = r => lb.tab==="week" ? (r.week===mon ? r.week_ans : 0) : r.points;
+  const rows = [...lb.rows].sort((a,b) => val(b) - val(a) || b.points - a.points);
+  const unit = lb.tab==="week" ? "réponses" : "points";
+  return head + `
+    <div class="chips" id="lbtab"><button type="button" class="chip" data-tab="week" aria-pressed="${lb.tab==="week"}">Cette semaine</button><button type="button" class="chip" data-tab="all" aria-pressed="${lb.tab==="all"}">Grade et points</button></div>
+    <ol class="lb">${rows.map((r,i) => { const g = GRADES.find(x=>x.n===r.grade) || GRADES[0]; return `<li class="${r.user_id===acct.user.id?"me":""}"><span class="rk num">${i+1}</span>${insignia(g, 28)}<span class="who"><b>${escHtml(r.pseudo)}</b><small>${escHtml(r.grade||"")}${r.streak?` · série ${r.streak} j`:""}</small></span><b class="num">${val(r)}<small> ${unit}</small></b></li>`; }).join("")}</ol>
+    <p class="muted" style="font-size:.85rem">${lb.tab==="week" ? "Réponses données depuis lundi (QCM, cartes, cas, examens). Remis à zéro chaque lundi." : "Points cumulés depuis le début (voir « Comment gagner des points » dans Mon niveau)."} Mis à jour quand chacun utilise l'appli.</p>
+    <div class="row"><button type="button" class="btn" id="lbre">Actualiser</button><button type="button" class="btn" id="lbquit">Quitter le classement</button></div>`;
+}
+function bindClassement(){
+  const j = $("#lbjoin");
+  if(j) j.onsubmit = async e => {
+    e.preventDefault(); const p = $("#lbp").value.trim(); if(!p) return;
+    if(p !== acct.pseudo){ acct.pseudo = p; await SB.from("profiles").upsert({id:acct.user.id, pseudo:p}); setTabLabel(); }
+    S.lb = Date.now(); save(); lb.rows = null; lb.err = ""; render(); loadLb();
+  };
+  const t = $("#lbtab"); if(t) t.onclick = e => { const b = e.target.closest("[data-tab]"); if(b){ lb.tab = b.dataset.tab; render(); } };
+  const re = $("#lbre"); if(re) re.onclick = () => { lb.rows = null; lb.err = ""; render(); loadLb(); };
+  const q = $("#lbquit"); if(q) q.onclick = async () => { S.lb = -Date.now(); save(); lb.rows = null; lb.gone = false; await pushScore(); render(); };
+  if(inLb() && acct.user && !lb.busy && Date.now() - lb.at > 30000) loadLb();
+}
+ROUTES.classement = "Classement";
+VIEWS.classement = [vClassement, bindClassement];
 
 ROUTES.compte = "Se connecter";
 VIEWS.compte = [vCompte, bindCompte];

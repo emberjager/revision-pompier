@@ -43,10 +43,10 @@ Légende : ☐ à faire · ◐ en cours · ☑ fait · 🎨 choix visuel à vali
 - ☐ **N7. Format officiel de l'examen blanc** ❓ : bouton « Format officiel » préréglé. L'utilisateur donnera le nombre de questions, la durée et le barème.
 
 ## Phase 4 — Motivation
-- ☐ **M1. Série et objectif du jour plus visibles** : ils existent déjà, à mettre en avant sur l'accueil.
-- ☐ **M2. Grades pompier** — choix A validé : écusson du grade + barre vers le grade suivant. Grades débloqués selon la progression (sapeur, caporal, caporal-chef, sergent…), avec un écusson.
-- ☐ **M3. Classement CIS** : entre collègues, via Supabase (table de scores et RLS). Demander s'il faut un pseudo ou un prénom.
-- ☐ **M4. Rappel quotidien** : notification « N questions à revoir » quand l'app est installée sur le téléphone (PWA). Limite : sur iPhone, il faut iOS 16.4 ou plus et l'app ajoutée à l'écran d'accueil.
+- ☑ **M1. Série et objectif du jour plus visibles** (fait le 2026-11-07) : pastille flamme + série dans l'en-tête sur toutes les pages, barre jaune = objectif du jour ; record de série sur l'accueil ; message « Objectif du jour atteint ! » une fois par jour. Sur téléphone, le bouton clair/sombre de l'en-tête est retiré (il reste dans Réglages > Affichage).
+- ☑ **M2. Grades pompier** (fait le 2026-11-07, choix A) : 13 grades de Sapeur 2e classe à Colonel, écussons stylisés (pas les insignes officiels). Points = 1 par bonne réponse + 5 par question maîtrisée + 10 par examen blanc (+10 si ≥ 10/20) + 5 par jour d'objectif atteint. Carte sur l'accueil, détail et échelle dans « Mon niveau », message à chaque nouveau grade. Seuils ajustables dans GRADES (js/app.js).
+- ◐ **M3. Classement CIS** (code fait le 2026-11-07) : page #classement, participation volontaire avec le pseudo du compte (prénom ou surnom au choix de chacun), onglets « Cette semaine » (réponses depuis lundi) et « Grade et points ». **Reste : créer la table `scores` dans Supabase** (SQL en bas de supabase/schema.sql). Limite : les scores sont déclarés par l'appli de chacun (pas de contrôle anti-triche), et tout compte connecté peut lire les pseudos du classement.
+- ☑ **M4. Rappel quotidien** (fait le 2026-11-07) : Réglages > Rappel quotidien (heure 8/12/18/20 h, bouton « Tester »). Le service worker notifie « N questions à revoir » si l'objectif du jour n'est pas atteint. Limite : rappel automatique seulement sur Chrome/Edge Android avec l'appli installée (synchro périodique) ; le navigateur choisit le moment exact après l'heure demandée. Ailleurs (iPhone, PC), seul le test fonctionne : il faudrait un serveur d'envoi (Web Push) pour aller plus loin.
 
 ## Phase 5 — Contenu
 - ☐ **C1. Préparation à l'oral** : questions de jury types, chrono de présentation, éléments de réponse modèles et grille d'auto-évaluation.

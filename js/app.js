@@ -24,6 +24,7 @@ const S = {
   concours: LS.get("concours",""), // date du concours "AAAA-MM-JJ"
   fav: LS.get("fav",{}),  // questions favorites : id -> date d'ajout (> 0) ou de retrait (< 0), pour fusionner entre appareils
   sd: LS.get("sd",{}),    // mort subite : clé de thèmes -> record
+  lb: LS.get("lb",0),     // classement du CIS : date d'inscription (> 0) ou de départ (< 0)
   rep: LS.get("rep",[])   // signalements (gardés sur l'appareil seulement) : [{id, t, q, kind, note, at}]
 };
 const isFav = id => (S.fav[id]||0) > 0;
@@ -31,8 +32,8 @@ const isFav = id => (S.fav[id]||0) > 0;
 const OLD_TH = ["suap","inc","div","sr","fdf","cult","com"];
 const withNewThemes = (themes, known) => [...themes, ...Object.keys(TH).filter(t => !known.includes(t) && !themes.includes(t))];
 S.themes = withNewThemes(S.themes, LS.get("thk", OLD_TH)); LS.set("thk", Object.keys(TH));
-const KEYS = ["obj","themes","qp","fp","cp","fs","days","goal","ex","qcm","presets","last","concours","fav","sd","rep"];
-const save = () => { KEYS.forEach(k => LS.set(k, S[k])); if (window.onLocalSave) window.onLocalSave(); };
+const KEYS = ["obj","themes","qp","fp","cp","fs","days","goal","ex","qcm","presets","last","concours","fav","sd","rep","lb"];
+const save = () => { KEYS.forEach(k => LS.set(k, S[k])); if (window.onLocalSave) window.onLocalSave(); motivCheck(); renderStreak(); };
 
 /* ---------- Répétition espacée et activité du jour ----------
    Boîtes de Leitner : réussite = boîte suivante, revue dans 1, 3, 7, 14 puis 30 jours ; erreur = retour en boîte 0, revue le lendemain. */
@@ -231,12 +232,12 @@ function vAccueil(){
       <button type="button" class="btn primary big" data-quiz="mix">Quiz rapide · 10 questions</button>`}
     <div class="day-foot">
       <div class="day-goal"><span class="muted"><b class="num">${done}</b> / ${S.goal} réponses aujourd'hui${done>=S.goal?" · objectif atteint":""}</span><div class="progress big"><i style="width:${Math.min(100,pct(done,S.goal))}%"></i></div></div>
-      <div class="streak ${st?"on":""}" title="Jours consécutifs avec l'objectif atteint"><b class="num">${st}</b><span>jour${st>1?"s":""} de série</span></div>
+      <div class="streak ${st?"on":""}" title="Jours consécutifs avec l'objectif atteint"><b class="num">${st}</b><span>jour${st>1?"s":""} de série${bestStreak()>st?` · record ${bestStreak()}`:""}</span></div>
     </div>
     ${dueCards?`<div><button type="button" class="btn" id="go-cards">Cartes à revoir (${dueCards})</button></div>`:""}
   </section>
   ${runsHtml()}
-  ${prepMini()}
+  <div class="motiv">${gradeCard()}${prepMini()}</div>
   ${quick?`<section class="quick"><span class="label">Lancer vite</span><div class="qlist">${quick}</div></section>`:""}
   <div class="stats">
     <div class="stat"><b class="num">${mastered}<span style="font-size:1rem"> / ${qs.length}</span></b><span>questions maîtrisées</span></div>
@@ -382,6 +383,7 @@ function vNiveau(){
       </ul>
       <p class="muted">Le score de chaque thème suit la même règle, sans les examens : maîtrise 75 %, couverture 25 %.</p></details>
   </section>
+  ${gradeSection()}
   <section style="display:grid;gap:10px"><h3>Par thème</h3><div class="panel tlines">${rows}</div></section>
   <section style="display:grid;gap:10px"><h3>Points faibles</h3>
     ${weak.length ? `<div class="themes weak">${weak.map(g => `<div class="trow"><div class="name"><div>${wkName(g.k)}<small>${pc(g.r)} % de bonnes réponses · ${pl(g.q, "question")} vue${g.q>1?"s":""}</small></div></div><div class="bar"><i style="width:${pc(g.r)}%"></i></div><button type="button" class="btn" data-work="${esc(g.k)}">Travailler ça</button></div>`).join("")}</div>
@@ -404,6 +406,152 @@ function prepMini(){
   return `<a class="panel prepmini" href="#niveau">${gauge(r.s, "sm")}<span><b>Prêt pour le concours</b><small>${low ? `Thème le plus faible : ${TH[low.t].n} (${low.s} %)` : "Fais quelques quiz pour voir ton niveau par thème"}</small></span><span class="go" aria-hidden="true">›</span></a>`;
 }
 
+/* ---------- Motivation : grades, série, messages, rappel quotidien ---------- */
+/* Grades débloqués avec les points. Écussons stylisés (pas les insignes officiels). */
+const GRADES = [
+  {n:"Sapeur 2e classe", p:0, k:"sp", c:0}, {n:"Sapeur 1re classe", p:40, k:"chev", c:1},
+  {n:"Caporal", p:120, k:"chev", c:2}, {n:"Caporal-chef", p:300, k:"chev", c:3},
+  {n:"Sergent", p:600, k:"bar", c:2}, {n:"Sergent-chef", p:1000, k:"bar", c:3},
+  {n:"Adjudant", p:1500, k:"adj", c:1}, {n:"Adjudant-chef", p:2100, k:"adj", c:2},
+  {n:"Lieutenant", p:2800, k:"off", c:2}, {n:"Capitaine", p:3600, k:"off", c:3},
+  {n:"Commandant", p:4600, k:"off", c:4}, {n:"Lieutenant-colonel", p:5800, k:"off", c:5},
+  {n:"Colonel", p:7500, k:"off", c:5, star:true}
+];
+function points(){
+  let c = 0, m = 0;
+  for(const id in S.qp){ const p = S.qp[id]; c += p.c||0; if(boxOf(p) >= MASTER) m++; }
+  const ex = S.ex.reduce((a,e) => a + 10 + (e.note>=10 ? 10 : 0), 0);
+  const g = Object.values(S.days).filter(v => v >= S.goal).length;
+  return {c, m, ex, g, total: c + 5*m + ex + 5*g};
+}
+function gradeOf(pts){
+  let i = 0; while(i+1 < GRADES.length && pts >= GRADES[i+1].p) i++;
+  const g = GRADES[i], next = GRADES[i+1];
+  return {i, g, next, left: next ? next.p - pts : 0, pct: next ? Math.round(100*(pts-g.p)/(next.p-g.p)) : 100};
+}
+function insignia(g, size=60){
+  const W = 60, mid = 30; let inner = "";
+  const stack = (n, h, gap) => { const tot = n*h + (n-1)*gap, y0 = 34 - tot/2; return Array.from({length:n}, (_,i) => y0 + i*(h+gap)); };
+  if(g.k==="sp") inner = `<text x="${mid}" y="40" text-anchor="middle" class="ins-t">SP</text>`;
+  if(g.k==="chev") inner = stack(g.c, 7, 4).map(y => `<polyline points="16,${y} ${mid},${y+8} 44,${y}" class="ins-c"/>`).join("");
+  if(g.k==="bar") inner = stack(g.c, 5, 4).map(y => `<rect x="15" y="${y}" width="30" height="5" rx="1" class="ins-y"/>`).join("");
+  if(g.k==="adj") inner = stack(g.c, 8, 5).map(y => `<rect x="15" y="${y}" width="30" height="8" rx="1" class="ins-w"/><rect x="15" y="${y+3}" width="30" height="2" class="ins-r"/>`).join("");
+  if(g.k==="off") inner = stack(g.c, 4, 3).map(y => `<rect x="15" y="${y+(g.star?4:0)}" width="30" height="4" rx="1" class="ins-w"/>`).join("") + (g.star ? `<polygon points="30,9 32,14 37,14 33,17 34.5,22 30,19 25.5,22 27,17 23,14 28,14" class="ins-y"/>` : "");
+  return `<svg class="insignia" viewBox="0 0 ${W} 68" width="${size}" height="${Math.round(size*68/60)}" aria-hidden="true"><path d="M30 2 L58 10 V38 C58 52 45 62 30 66 C15 62 2 52 2 38 V10 Z" class="ins-s"/>${inner}</svg>`;
+}
+function bestStreak(){
+  const ok = Object.keys(S.days).filter(d => S.days[d] >= S.goal).sort();
+  let best = 0, run = 0, prev = null;
+  ok.forEach(d => { run = prev && addDays(prev, 1) === d ? run + 1 : 1; best = Math.max(best, run); prev = d; });
+  return best;
+}
+const weekAns = () => { const mon = mondayOf(today()); return Object.entries(S.days).filter(([d]) => d >= mon).reduce((a,[,v]) => a+v, 0); };
+function gradeCard(){
+  const pt = points(), gr = gradeOf(pt.total);
+  return `<a class="panel gradecard" href="#niveau">${insignia(gr.g, 52)}<span class="gc-txt"><b>${gr.g.n}</b>
+    ${gr.next ? `<span class="bar"><i style="width:${gr.pct}%"></i></span><small>${gr.pct} % vers ${gr.next.n} · encore ${gr.left} points</small>` : `<small>Plus haut grade atteint · ${pt.total} points</small>`}</span><span class="go" aria-hidden="true">›</span></a>`;
+}
+function gradeSection(){
+  const pt = points(), gr = gradeOf(pt.total);
+  return `<section style="display:grid;gap:10px" id="grades"><h3>Grade</h3>
+    <div class="panel gradebox">
+      <div class="gb-top">${insignia(gr.g, 72)}<div><b class="gb-n">${gr.g.n}</b><span class="muted num">${pt.total} points</span></div></div>
+      ${gr.next ? `<div class="bar"><i style="width:${gr.pct}%"></i></div><p class="muted">Encore <b class="num">${gr.left}</b> points pour passer ${gr.next.n}.</p>` : `<p class="muted">Tu as atteint le plus haut grade. Bravo !</p>`}
+      <details class="fiche corr"><summary>Comment gagner des points</summary>
+        <ul class="calc">
+          <li><b>1 point</b> par bonne réponse (QCM, examens) · ${pt.c} pts</li>
+          <li><b>5 points</b> par question maîtrisée (boîte ${MASTER} ou plus) · ${pt.m} × 5 = ${5*pt.m} pts</li>
+          <li><b>10 points</b> par examen blanc, <b>+10</b> s'il est réussi (10 / 20 ou plus) · ${pt.ex} pts</li>
+          <li><b>5 points</b> par jour où l'objectif est atteint · ${pt.g} × 5 = ${5*pt.g} pts</li>
+        </ul>
+        <div class="ladder">${GRADES.map((g,i) => `<div class="step ${i<gr.i?"done":i===gr.i?"on":"lock"}">${insignia(g, 22)}<span>${g.n}</span><span class="muted num">${g.p} pts</span></div>`).join("")}</div>
+        <p class="muted" style="padding:0 14px 14px;margin:0">Écussons stylisés, ce ne sont pas les insignes officiels.</p></details>
+    </div></section>`;
+}
+/* Pastille de l'en-tête : série + avancement de l'objectif du jour, visible sur toutes les pages */
+function renderStreak(){
+  const el = $("#spill"); if(!el) return;
+  const st = streak(), done = S.days[today()]||0, p = Math.min(100, pct(done, S.goal));
+  el.className = "hbtn spill" + (done >= S.goal ? " ok" : "");
+  el.title = `Série : ${st} jour${st>1?"s":""} · ${done} / ${S.goal} réponses aujourd'hui`;
+  el.setAttribute("aria-label", el.title);
+  el.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 2c1 4 5 6 5 11a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5 0 2 1 3 2 3 0-3-1-6 1-9.5z" fill="currentColor"/></svg><b class="num">${st}</b><i style="width:${p}%"></i>`;
+}
+/* Messages : objectif du jour atteint, nouveau grade */
+let toastTimer = null;
+function toast(html){
+  let t = $("#toast"); if(!t){ t = document.createElement("div"); t.id = "toast"; t.setAttribute("role","status"); document.body.appendChild(t); }
+  t.innerHTML = html.startsWith("<svg") ? html : `<span>${html}</span>`; t.classList.add("on");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("on"), 5000);
+}
+function motivCheck(){
+  const d = today(), done = S.days[d]||0;
+  if(done >= S.goal && LS.get("goalday","") !== d){
+    if(done - S.goal < 5){ const st = streak(); toast(`<b>Objectif du jour atteint !</b> Série : ${st} jour${st>1?"s":""}.`); }
+    LS.set("goalday", d);
+  }
+  const gi = gradeOf(points().total).i, was = LS.get("grade", null);
+  if(was !== null && gi > was) toast(`${insignia(GRADES[gi], 34)}<span><b>Nouveau grade : ${GRADES[gi].n} !</b><br>Continue comme ça.</span>`);
+  if(was !== gi) LS.set("grade", gi);
+  remindSave();
+}
+/* Rappel quotidien : l'appli range dans un cache ce que le service worker doit savoir, et lui demande
+   une synchro périodique (Chrome Android, appli installée). Le navigateur choisit l'heure exacte. */
+const canNotify = () => "Notification" in window && "serviceWorker" in navigator;
+const canPeriodic = () => "serviceWorker" in navigator && "periodicSync" in (window.ServiceWorkerRegistration ? ServiceWorkerRegistration.prototype : {});
+let remindLast = "";
+function remindSave(){
+  if(!LS.get("remind", false) || !("caches" in window)) return;
+  const due = {}; visQ().forEach(q => { const p = S.qp[q.id]; if(p && p.due) due[p.due] = (due[p.due]||0) + 1; });
+  const st = {hour: LS.get("remindh", 18), goal: S.goal, days: {[today()]: S.days[today()]||0}, due};
+  const js = JSON.stringify(st); if(js === remindLast) return; remindLast = js;
+  caches.open("rsp-state").then(c => c.match("state").then(r => r ? r.json() : {}).then(old => c.put("state", new Response(JSON.stringify({...st, notified: old.notified||""}))))).catch(()=>{});
+}
+async function remindOn(){
+  if(!canNotify()) return "Ce navigateur ne gère pas les notifications.";
+  const perm = await Notification.requestPermission();
+  if(perm !== "granted") return "Notifications refusées. Tu peux les autoriser dans les réglages du navigateur pour ce site.";
+  LS.set("remind", true); remindLast = ""; remindSave();
+  if(!canPeriodic()) return "";
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const st = await navigator.permissions.query({name:"periodic-background-sync"}).catch(() => ({state:"granted"}));
+    if(st.state !== "granted") return "Le navigateur refuse les rappels en arrière-plan : installe l'appli sur l'écran d'accueil puis réessaie.";
+    await reg.periodicSync.register("rsp-rappel", {minInterval: 12*3600*1000});
+  } catch(e){ return "Rappel non programmé : " + e.message; }
+  return "";
+}
+async function remindOff(){
+  LS.set("remind", false);
+  try { const reg = await navigator.serviceWorker.ready; if(reg.periodicSync) await reg.periodicSync.unregister("rsp-rappel"); } catch(e){}
+}
+async function remindTest(){
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const due = dueQ().length;
+    await reg.showNotification("Révisions SP", {body: due ? `${due} question${due>1?"s":""} à revoir aujourd'hui.` : `Objectif du jour : ${S.goal} réponses.`, icon:"icons/icon.svg", tag:"rsp-test"});
+    return "";
+  } catch(e){ return "Notification impossible : " + e.message; }
+}
+let remindMsg = "";
+function remindPanel(){
+  const on = LS.get("remind", false), h = LS.get("remindh", 18);
+  const support = !canNotify() ? "no" : canPeriodic() ? "full" : "open";
+  return `<section class="panel"><h3>Rappel quotidien</h3>
+    <p class="muted">Une notification « N questions à revoir » si tu n'as pas encore fait ton objectif du jour.</p>
+    ${support==="no" ? `<p class="muted">Ce navigateur ne gère pas les notifications.</p>` : `
+    <div class="row"><button type="button" class="btn ${on?"":"primary"}" id="rem-tg" aria-pressed="${on}">${on?"Désactiver le rappel":"Activer le rappel"}</button>${on?`<button type="button" class="btn" id="rem-test">Tester</button>`:""}</div>
+    ${on ? `<span class="label">À partir de</span><div class="chips" id="rem-h">${[8,12,18,20].map(x=>`<button type="button" class="chip" data-h="${x}" aria-pressed="${h===x}">${x} h</button>`).join("")}</div>` : ""}`}
+    <p class="muted" style="font-size:.85rem">${support==="full" ? "Fonctionne quand l'appli est installée sur l'écran d'accueil (Chrome sur Android). Le téléphone choisit le moment exact, après l'heure indiquée, une fois par jour au plus."
+      : "Sur ce navigateur, le rappel n'arrive pas quand l'appli est fermée : c'est possible seulement avec Chrome sur Android, appli installée. Sur iPhone, il faudrait un serveur d'envoi (pas encore en place)."}</p>
+    ${remindMsg ? `<p class="explain no">${esc(remindMsg)}</p>` : ""}</section>`;
+}
+function bindRemind(){
+  const tg = $("#rem-tg"); if(tg) tg.onclick = async () => { remindMsg = LS.get("remind", false) ? (await remindOff(), "") : await remindOn(); render(); };
+  const te = $("#rem-test"); if(te) te.onclick = async () => { remindMsg = await remindTest(); if(remindMsg) render(); };
+  const hh = $("#rem-h"); if(hh) hh.onclick = e => { const b = e.target.closest("[data-h]"); if(b){ LS.set("remindh", +b.dataset.h); remindLast = ""; remindSave(); render(); } };
+}
+
 /* ---------- Réglages ---------- */
 function vReglages(){
   const dl = daysLeft();
@@ -418,6 +566,7 @@ function vReglages(){
   <section class="panel"><h3>Objectif quotidien</h3>
     <p class="muted">Nombre de réponses à donner chaque jour pour faire grandir ta série. La session du jour s'y adapte.</p>
     <div class="chips" id="goal">${[10,20,40,60].map(n=>`<button type="button" class="chip" data-g="${n}" aria-pressed="${S.goal===n}">${n}</button>`).join("")}</div></section>
+  ${remindPanel()}
   <section class="panel"><h3>Remettre à zéro</h3>
     <p class="muted">Efface tes résultats (QCM, cartes, cas, activité, examens blancs) sur cet appareil et sur ton compte.</p>
     <div class="confirm" id="reset"><button type="button" class="btn" id="reset-ask">Réinitialiser ma progression</button></div></section>
@@ -429,6 +578,7 @@ function bindReglages(){
   $("#thm").onclick = e => { const b=e.target.closest("[data-th]"); if(b){ setTheme(b.dataset.th); render(); } };
   $("#cdate").onchange = e => { S.concours = e.target.value || ""; save(); render(); };
   const cd = $("#cdel"); if(cd) cd.onclick = () => { S.concours = ""; save(); render(); };
+  bindRemind();
   $("#goal").onclick = e => { const b=e.target.closest("[data-g]"); if(b){ S.goal=+b.dataset.g; save(); render(); } };
   $("#reset-ask").addEventListener("click", () => {
     $("#reset").innerHTML = `<span>Tout effacer ?</span><button type="button" class="btn primary" id="reset-yes">Oui, effacer</button><button type="button" class="btn" id="reset-no">Annuler</button>`;
@@ -935,7 +1085,7 @@ function bindExamen(){
 const VIEWS = {niveau:[vNiveau,bindNiveau], signalements:[vSignalements,bindSignalements], accueil:[vAccueil,bindAccueil], qcm:[vQcm,bindQcm], cartes:[vCartes,bindCartes], fiches:[vFiches,bindFiches], cas:[vCas,bindCas], examen:[vExamen,bindExamen], reglages:[vReglages,bindReglages]};
 function render(){
   qtStop();
-  renderTabs();
+  renderTabs(); renderStreak();
   const [v,b] = VIEWS[route()];
   $("#view").innerHTML = v(); b();
   saveRun();

@@ -32,3 +32,24 @@ drop policy if exists "progression: modifier la sienne" on public.progress;
 create policy "progression: lire la sienne" on public.progress for select using (auth.uid() = user_id);
 create policy "progression: créer la sienne" on public.progress for insert with check (auth.uid() = user_id);
 create policy "progression: modifier la sienne" on public.progress for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- ---------- Classement du CIS (phase 4) : une ligne par participant volontaire ----------
+create table if not exists public.scores (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  pseudo text not null check (char_length(pseudo) between 1 and 30),
+  points int not null default 0,
+  grade text,
+  week date,
+  week_ans int not null default 0,
+  streak int not null default 0,
+  updated_at timestamptz not null default now()
+);
+alter table public.scores enable row level security;
+drop policy if exists "classement: lire (connectés)" on public.scores;
+drop policy if exists "classement: créer le sien" on public.scores;
+drop policy if exists "classement: modifier le sien" on public.scores;
+drop policy if exists "classement: quitter" on public.scores;
+create policy "classement: lire (connectés)" on public.scores for select to authenticated using (true);
+create policy "classement: créer le sien" on public.scores for insert to authenticated with check (auth.uid() = user_id);
+create policy "classement: modifier le sien" on public.scores for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "classement: quitter" on public.scores for delete to authenticated using (auth.uid() = user_id);
