@@ -199,3 +199,7 @@ a.btn{text-decoration:none;display:inline-block}
 .srcopt input{width:18px;height:18px;flex:none;margin:0}
 .srcopt span{flex:1}
 .srcopt small{color:var(--muted)}
+.srcgrp{display:grid;gap:2px}
+.srcgrp .label{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.srcall{margin-left:auto;font-weight:400;text-transform:none;letter-spacing:0}
+.srcall button{background:none;border:0;padding:2px 4px;color:var(--red);text-decoration:underline;cursor:pointer;font:inherit;font-size:.85rem}
