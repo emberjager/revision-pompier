@@ -1,5 +1,5 @@
 // Hors ligne : on sert le réseau en priorité (contenu toujours à jour), et le cache si pas de connexion.
-const CACHE = "rsp-v23";
+const CACHE = "rsp-v24";
 const FILES = ["./", "index.html", "css/style.css", "js/config.js", "js/data.js", "js/app.js", "js/sync.js", "manifest.webmanifest", "icons/icon.svg"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener("activate", e => {
