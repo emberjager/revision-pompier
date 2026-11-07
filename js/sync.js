@@ -28,8 +28,13 @@ function mergeData(remote){
   if(remote.goal) S.goal = remote.goal;
   if(remote.obj) S.obj = remote.obj;
   if(Array.isArray(remote.themes) && remote.themes.length) S.themes = withNewThemes(remote.themes, remote.thk || OLD_TH);
+  // Réglages ajoutés en phase 1 : date du concours, réglages QCM, dernier quiz, favoris (réunis par nom).
+  if(typeof remote.concours === "string") S.concours = remote.concours;
+  if(remote.qcm && typeof remote.qcm === "object"){ S.qcm = {...S.qcm, ...remote.qcm}; Object.assign(qcmSetup, {n:S.qcm.n, mode:S.qcm.mode, off:[...(S.qcm.off||[])]}); }
+  if(remote.last && (!S.last || (remote.last.at||0) > (S.last.at||0))) S.last = remote.last;
+  if(Array.isArray(remote.presets)){ const names = new Set(S.presets.map(p=>p.name)); S.presets = [...S.presets, ...remote.presets.filter(p=>p && !names.has(p.name))].slice(-8); }
 }
-const payload = () => ({obj:S.obj, themes:S.themes, qp:S.qp, fp:S.fp, cp:S.cp, fs:S.fs, days:S.days, goal:S.goal, ex:S.ex, thk:Object.keys(TH)});
+const payload = () => ({obj:S.obj, themes:S.themes, qp:S.qp, fp:S.fp, cp:S.cp, fs:S.fs, days:S.days, goal:S.goal, ex:S.ex, thk:Object.keys(TH), concours:S.concours, qcm:S.qcm, last:S.last, presets:S.presets});
 
 let pushTimer = null, applying = false;
 async function push(){

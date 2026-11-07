@@ -17,13 +17,17 @@ const S = {
   fs: LS.get("fs",{}),   // cartes, répétition espacée : id -> {box, due, n}
   days: LS.get("days",{}), // activité : "AAAA-MM-JJ" -> nombre de réponses
   goal: LS.get("goal",20), // objectif du jour (réponses)
-  ex: LS.get("ex",[])    // examens blancs : [{d, n, ok, note, min, used}]
+  ex: LS.get("ex",[]),   // examens blancs : [{d, n, ok, note, min, used}]
+  qcm: LS.get("qcm",{n:10, mode:"all", off:[]}), // derniers réglages du QCM
+  presets: LS.get("presets",[]), // favoris de réglages : [{name, themes, n, mode, off}]
+  last: LS.get("last",null),     // dernier quiz lancé depuis les réglages ou un favori
+  concours: LS.get("concours","") // date du concours "AAAA-MM-JJ"
 };
 // Thèmes ajoutés depuis la dernière visite : cochés d'office (OLD_TH = thèmes de la V1).
 const OLD_TH = ["suap","inc","div","sr","fdf","cult","com"];
 const withNewThemes = (themes, known) => [...themes, ...Object.keys(TH).filter(t => !known.includes(t) && !themes.includes(t))];
 S.themes = withNewThemes(S.themes, LS.get("thk", OLD_TH)); LS.set("thk", Object.keys(TH));
-const KEYS = ["obj","themes","qp","fp","cp","fs","days","goal","ex"];
+const KEYS = ["obj","themes","qp","fp","cp","fs","days","goal","ex","qcm","presets","last","concours"];
 const save = () => { KEYS.forEach(k => LS.set(k, S[k])); if (window.onLocalSave) window.onLocalSave(); };
 
 /* ---------- Répétition espacée et activité du jour ----------
@@ -57,6 +61,32 @@ const activeThemes = () => { const avail = themesForLevel(); const sel = S.theme
 const shuffle = a => { a=[...a]; for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; };
 const $ = s => document.querySelector(s);
 const badge = t => `<span class="code">${TH[t].k}</span>`;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const svg = (p, s=22) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
+const ICON = {
+  accueil: svg('<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>'),
+  qcm: svg('<path d="M10 6h11M10 12h11M10 18h11M3 6l1.5 1.5L7 5M3 12l1.5 1.5L7 11M3 18l1.5 1.5L7 17"/>'),
+  cartes: svg('<rect x="3" y="7" width="13" height="14" rx="2"/><path d="M8 3h11a2 2 0 0 1 2 2v12"/>'),
+  plus: svg('<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>'),
+  play: svg('<path d="M8 5v14l11-7z" fill="currentColor"/>'),
+  star: svg('<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>', 20),
+  redo: svg('<path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/>', 20),
+  auto: svg('<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/>'),
+  light: svg('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),
+  dark: svg('<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>'),
+  gear: svg('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>')
+};
+
+/* ---------- Thème clair / sombre (réglage propre à l'appareil, non synchronisé) ---------- */
+const THEMES = {auto:"Auto", light:"Clair", dark:"Sombre"};
+let theme = LS.get("theme","auto");
+function applyTheme(){
+  const r = document.documentElement;
+  if(theme==="auto") r.removeAttribute("data-theme"); else r.setAttribute("data-theme", theme);
+  const b = $("#theme-btn"); if(b){ b.innerHTML = ICON[theme]; b.title = "Thème : "+THEMES[theme]+" (toucher pour changer)"; b.setAttribute("aria-label", b.title); }
+}
+function setTheme(t){ theme = THEMES[t] ? t : "auto"; LS.set("theme", theme); applyTheme(); }
+$("#theme-btn").addEventListener("click", () => { setTheme({auto:"light", light:"dark", dark:"auto"}[theme]); if(route()==="reglages") render(); });
 
 /* ---------- En-tête : objectif et onglets ---------- */
 function renderObj(){
@@ -66,12 +96,37 @@ $("#obj").addEventListener("click", e => {
   const b = e.target.closest("button[data-obj]"); if(!b) return;
   S.obj = b.dataset.obj; save(); renderObj(); quiz=null; deck=null; casRun=null; render();
 });
-const ROUTES = {accueil:"Tableau de bord", qcm:"QCM", cartes:"Cartes", fiches:"Fiches", cas:"Cas pratiques", examen:"Examen blanc"};
+const ROUTES = {accueil:"Tableau de bord", qcm:"QCM", cartes:"Cartes", fiches:"Fiches", cas:"Cas pratiques", examen:"Examen blanc", reglages:"Réglages"};
 function route(){ const h=location.hash.slice(1); return ROUTES[h]?h:"accueil"; }
+const go = r => { if(route()===r) render(); else location.hash = r; };
+/* Navigation : onglets en haut sur PC ; sur téléphone, barre flottante en bas + bouton rond « Lancer » */
+const BAR = ["accueil","qcm","cartes"];
+let moreOpen = false;
+const quizRunning = () => !!(quiz && !quiz.empty && quiz.i < quiz.items.length);
 function renderTabs(){
   const r = route();
-  $("#tabs").innerHTML = Object.entries(ROUTES).map(([k,v]) => `<a href="#${k}" ${r===k?'aria-current="page"':''}>${v}</a>`).join("");
+  $("#tabs").innerHTML = Object.entries(ROUTES).filter(([k])=>k!=="reglages").map(([k,v]) => `<a href="#${k}" ${r===k?'aria-current="page"':''}>${v}</a>`).join("");
+  const more = Object.keys(ROUTES).filter(k=>!BAR.includes(k));
+  const cur = k => r===k ? 'aria-current="page"' : "";
+  $("#bnav").innerHTML = `<div class="more" id="more" ${moreOpen?"":"hidden"}>${more.map(k=>`<a href="#${k}" ${cur(k)}>${ROUTES[k]}</a>`).join("")}</div>
+    <div class="bnav-bar">${BAR.map(k=>`<a href="#${k}" ${cur(k)}>${ICON[k]}<span>${k==="accueil"?"Accueil":ROUTES[k]}</span></a>`).join("")}<button type="button" id="more-btn" aria-expanded="${moreOpen}" aria-controls="more" ${more.includes(r)?'aria-current="page"':""}>${ICON.plus}<span>Plus</span></button></div>
+    <button type="button" class="fab" id="fab">${ICON.play}<span>${quizRunning()?"Continuer":"Lancer"}</span></button>`;
 }
+function launchDay(){
+  if(quizRunning()){ go("qcm"); return; }
+  const p = dayPlan();
+  if(p.n) startQuiz(themesForLevel(), p.n, "day"); else startQuiz(themesForLevel(), 10, "all");
+  go("qcm");
+}
+$("#bnav").addEventListener("click", e => {
+  e.stopPropagation();
+  if(e.target.closest("#more-btn")){ moreOpen = !moreOpen; renderTabs(); return; }
+  if(e.target.closest("#fab")){ moreOpen = false; launchDay(); return; }
+  // Ne pas redessiner ici : un lien retiré de la page pendant le clic ne navigue plus.
+  if(e.target.closest("a")){ moreOpen = false; $("#more").hidden = true; $("#more-btn").setAttribute("aria-expanded","false"); }
+});
+document.addEventListener("click", () => { if(moreOpen){ moreOpen = false; renderTabs(); } });
+document.addEventListener("keydown", e => { if(e.key==="Escape" && moreOpen){ moreOpen = false; renderTabs(); } });
 
 function themeChips(){
   const act = activeThemes();
@@ -100,17 +155,49 @@ function activity(){
     return `<div class="act-col" title="${new Date(d+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})} : ${v} réponse${v>1?"s":""}"><div class="act-bar"><i class="${v>=S.goal?"hit":""}" style="height:${v?Math.max(4,pct(v,max)):0}%"></i><b style="bottom:${pct(S.goal,max)}%"></b></div><span${d===today()?' class="now"':""}>${jours[wd]}</span></div>`;
   }).join("")}</div>`;
 }
+/* Session du jour : questions à revoir d'abord, complétées par des nouvelles ; 10 à 20 questions selon ce qui reste de l'objectif. */
+function dayPlan(){
+  const qs = visQ(), done = S.days[today()]||0;
+  const due = qs.filter(q=>isDue(S.qp[q.id])).length, fresh = qs.filter(q=>!S.qp[q.id]).length;
+  const n = Math.min(Math.max(10, Math.min(20, S.goal - done)), due + fresh);
+  const d = Math.min(due, n);
+  return {n, due:d, fresh:n-d, min:Math.max(1, Math.round(n*0.5))};
+}
+const daysLeft = () => S.concours ? Math.round((new Date(S.concours+"T12:00:00") - new Date(today()+"T12:00:00"))/864e5) : null;
+const MODES = {all:"toutes", due:"à revoir", new:"jamais vues", err:"mes erreurs"};
+function cfgName(c){
+  const all = themesForLevel(), th = (c.themes||[]).filter(t=>TH[t]);
+  const t = !th.length || all.every(x=>th.includes(x)) ? "Tous thèmes" : th.map(x=>TH[x].k).join(" + ");
+  const off = (c.off||[]).length;
+  return t + " · " + (c.n===999 ? "toutes les questions" : c.n+" q") + (c.mode && c.mode!=="all" ? " · "+MODES[c.mode] : "") + (off ? ` · ${off} réf. exclu${off>1?"s":""}` : "");
+}
+/* Lance un quiz avec des réglages enregistrés (dernier quiz ou favori) */
+function launch(c){
+  if(!c) return;
+  const avail = themesForLevel(); let th = (c.themes||[]).filter(t=>avail.includes(t)); if(!th.length) th = avail;
+  S.last = {themes:th, n:c.n, mode:c.mode, off:[...(c.off||[])], at:Date.now()}; save();
+  startQuiz(th, c.n, c.mode, c.off); go("qcm");
+}
+/* Sessions interrompues (quiz, examen, cartes, cas) à continuer */
+function runsHtml(){
+  const l = [];
+  if(quizRunning()) l.push(["qcm","Quiz en cours",`question ${quiz.i+1} / ${quiz.items.length} · ${quiz.score} juste${quiz.score>1?"s":""}`]);
+  if(exam && !exam.done) l.push(["examen","Examen blanc en cours",`${exam.items.filter(x=>x.a!==null).length} / ${exam.items.length} répondues · ${fmtTime(exam.end-Date.now())} restantes`]);
+  if(deck && deck.i < deck.items.length) l.push(["cartes","Cartes en cours",`carte ${deck.i+1} / ${deck.items.length}`]);
+  if(casRun && casRun.i < casRun.c.steps.length) l.push(["cas","Cas pratique en cours",`${casRun.c.n} · étape ${casRun.i+1} / ${casRun.c.steps.length}`]);
+  return l.map(([r,t,s])=>`<a class="resume" href="#${r}"><span><b>${t}</b><small>${s}</small></span><span class="btn">Continuer</span></a>`).join("");
+}
 function vAccueil(){
   const qs = visQ(), fs = visF();
-  const seen = qs.filter(q=>S.qp[q.id]).length;
   const mastered = qs.filter(q=>boxOf(S.qp[q.id])>=MASTER).length;
   const known = fs.filter(f=>S.fp[f.id]).length;
   const cases = CAS.filter(lvOk); const doneC = cases.filter(c=>S.cp[c.id]!=null).length;
   const errs = qs.filter(q=>S.qp[q.id]&&!S.qp[q.id].ok).length;
-  const due = dueQ().length, fresh = qs.length - seen;
   const dueCards = fs.filter(f=>isDue(S.fs[f.id])).length;
   const done = S.days[today()]||0, st = streak();
   const lastEx = S.ex[S.ex.length-1];
+  const p = dayPlan(), dl = daysLeft();
+  const jx = dl===null ? `<a class="jx add" href="#reglages">+ date du concours</a>` : dl>0 ? `<span class="jx" title="Jours avant le concours">J-${dl}</span>` : dl===0 ? `<span class="jx">Jour J</span>` : "";
   const rows = themesForLevel().map(t => {
     const tq = qs.filter(q=>q.t===t);
     const m = tq.filter(q=>boxOf(S.qp[q.id])>=MASTER).length;
@@ -119,25 +206,24 @@ function vAccueil(){
     const td = tq.filter(q=>isDue(S.qp[q.id])).length;
     return `<div class="trow"><div class="name">${badge(t)}<div>${TH[t].n}<small>${m} / ${tq.length} maîtrisées${n?` · ${pct(c,n)} % de bonnes réponses`:""}${td?` · <b class="due">${td} à revoir</b>`:""}</small></div></div><div class="bar duo" title="${m} maîtrisées, ${prog} en cours"><i style="width:${pct(m,tq.length)}%"></i><i class="mid" style="width:${pct(prog,tq.length)}%"></i></div><button type="button" class="btn" data-quiz="${t}">Quiz</button></div>`;
   }).join("");
+  const quick = (S.last ? `<button type="button" class="qbtn" data-last><span class="qi">${ICON.redo}</span><span><b>Relancer le dernier quiz</b><small>${esc(cfgName(S.last))}</small></span></button>` : "")
+    + S.presets.map((f,i)=>`<button type="button" class="qbtn" data-p="${i}"><span class="qi">${ICON.star}</span><span><b>${esc(f.name)}</b>${f.name!==cfgName(f)?`<small>${esc(cfgName(f))}</small>`:""}</span></button>`).join("");
   return `
-  <section style="display:grid;gap:8px">
-    <span class="label">Objectif : ${LV[S.obj]}</span>
-    <h2>Où en es-tu ?</h2>
-    <p class="lead">${seen ? `Tu as déjà travaillé ${seen} questions sur ${qs.length}. Une question est maîtrisée quand tu l'as réussie ${MASTER} fois de suite, à quelques jours d'écart.` : `Rien de commencé pour l'instant. Lance les révisions du jour pour faire un premier point.`}</p>
-  </section>
-  <section class="panel today">
-    <div class="today-head">
-      <div><span class="label">Aujourd'hui</span><div class="num today-count">${done}<span> / ${S.goal} réponses</span></div></div>
+  <section class="panel daycard">
+    <div class="day-top"><span class="label">Session du jour · ${LV[S.obj]}</span>${jx}</div>
+    ${p.n ? `<div><div class="day-n num">${p.n}<span> questions</span></div>
+      <p class="day-mix">${p.due?`<b class="due">${p.due} à revoir</b>`:"0 à revoir"} · ${p.fresh} nouvelle${p.fresh>1?"s":""} · ≈ ${p.min} min</p></div>
+      <button type="button" class="btn primary big" data-quiz="day">Commencer</button>`
+    : `<p class="lead">Tout est à jour : rien à revoir aujourd'hui et toutes les questions ont été vues. Fais un quiz rapide ou un examen blanc.</p>
+      <button type="button" class="btn primary big" data-quiz="mix">Quiz rapide · 10 questions</button>`}
+    <div class="day-foot">
+      <div class="day-goal"><span class="muted"><b class="num">${done}</b> / ${S.goal} réponses aujourd'hui${done>=S.goal?" · objectif atteint":""}</span><div class="progress big"><i style="width:${Math.min(100,pct(done,S.goal))}%"></i></div></div>
       <div class="streak ${st?"on":""}" title="Jours consécutifs avec l'objectif atteint"><b class="num">${st}</b><span>jour${st>1?"s":""} de série</span></div>
     </div>
-    <div class="progress big"><i style="width:${Math.min(100,pct(done,S.goal))}%"></i></div>
-    <p class="muted">${done>=S.goal ? "Objectif atteint, bravo. Tu peux continuer, tout compte pour ta mémoire." : due ? `${due} question${due>1?"s":""} à revoir aujourd'hui${fresh?`, et ${fresh} jamais vue${fresh>1?"s":""}`:""}.` : fresh ? `Rien à revoir : place aux ${fresh} questions jamais vues.` : "Rien à revoir aujourd'hui : tout est à jour."}${dueCards?` ${dueCards} carte${dueCards>1?"s":""} à revoir.`:""}</p>
-    <div class="row">
-      <button type="button" class="btn primary" data-quiz="day" ${due||fresh?"":"disabled"}>Révisions du jour</button>
-      ${dueCards?`<button type="button" class="btn" id="go-cards">Cartes à revoir (${dueCards})</button>`:""}
-    </div>
-    <div class="row goal"><span class="label">Objectif quotidien</span><div class="chips" id="goal">${[10,20,40,60].map(n=>`<button type="button" class="chip" data-g="${n}" aria-pressed="${S.goal===n}">${n}</button>`).join("")}</div></div>
+    ${dueCards?`<div><button type="button" class="btn" id="go-cards">Cartes à revoir (${dueCards})</button></div>`:""}
   </section>
+  ${runsHtml()}
+  ${quick?`<section class="quick"><span class="label">Lancer vite</span><div class="qlist">${quick}</div></section>`:""}
   <div class="stats">
     <div class="stat"><b class="num">${mastered}<span style="font-size:1rem"> / ${qs.length}</span></b><span>questions maîtrisées</span></div>
     <div class="stat"><b class="num">${known}<span style="font-size:1rem"> / ${fs.length}</span></b><span>cartes connues</span></div>
@@ -150,26 +236,48 @@ function vAccueil(){
     <a class="btn" href="#examen">Examen blanc</a>
   </div>
   <section style="display:grid;gap:10px"><h3>Par thème</h3>
+    <p class="muted" style="font-size:.9rem">Une question est maîtrisée quand tu l'as réussie ${MASTER} fois de suite, à quelques jours d'écart.</p>
     <div class="legend muted"><span><i class="sw ok"></i>maîtrisées</span><span><i class="sw mid"></i>en cours</span></div>
     <div class="themes">${rows}</div></section>
   <section style="display:grid;gap:10px"><h3>14 derniers jours</h3>
-    <div class="panel">${activity()}<p class="muted" style="font-size:.85rem">Le trait marque ton objectif du jour (${S.goal} réponses). Les jours où il est atteint sont en vert.</p></div></section>
-  <section class="panel">
-    <h3>Remettre à zéro</h3>
-    <p class="muted">Efface tes résultats (QCM, cartes, cas, activité, examens blancs) sur cet appareil et sur ton compte.</p>
-    <div class="confirm" id="reset"><button type="button" class="btn" id="reset-ask">Réinitialiser ma progression</button></div>
-  </section>`;
+    <div class="panel">${activity()}<p class="muted" style="font-size:.85rem">Le trait marque ton objectif du jour (${S.goal} réponses). Les jours où il est atteint sont en vert.</p></div></section>`;
 }
 function bindAccueil(){
   document.querySelectorAll("[data-quiz]").forEach(b => b.addEventListener("click", () => {
     const k = b.dataset.quiz;
     if(k==="mix") startQuiz(activeThemes(),10,"all");
-    else if(k==="day") startQuiz(themesForLevel(),20,"day");
+    else if(k==="day") startQuiz(themesForLevel(), dayPlan().n, "day");
     else if(k==="err") startQuiz(themesForLevel(),999,"err");
     else startQuiz([k],10,"all");
-    location.hash="qcm";
+    go("qcm");
   }));
-  const gc = $("#go-cards"); if(gc) gc.onclick = () => { cardMode="todo"; startDeck(); location.hash="cartes"; };
+  const gc = $("#go-cards"); if(gc) gc.onclick = () => { cardMode="todo"; startDeck(); go("cartes"); };
+  const lb = document.querySelector("[data-last]"); if(lb) lb.onclick = () => launch(S.last);
+  document.querySelectorAll("[data-p]").forEach(b => b.onclick = () => launch(S.presets[+b.dataset.p]));
+}
+
+/* ---------- Réglages ---------- */
+function vReglages(){
+  const dl = daysLeft();
+  return `<section style="display:grid;gap:8px"><span class="label">Réglages</span><h2>Réglages</h2></section>
+  <section class="panel"><h3>Affichage</h3>
+    <div class="chips" id="thm">${Object.entries(THEMES).map(([k,v])=>`<button type="button" class="chip" data-th="${k}" aria-pressed="${theme===k}">${ICON[k]} ${v}</button>`).join("")}</div>
+    <p class="muted" style="font-size:.9rem">« Auto » suit le mode clair ou sombre du téléphone ou de l'ordinateur. Ce réglage reste propre à chaque appareil.</p></section>
+  <section class="panel"><h3>Date du concours</h3>
+    <p class="muted">Elle affiche le compte à rebours sur l'accueil.</p>
+    <div class="row"><input type="date" class="field" id="cdate" value="${esc(S.concours)}" style="max-width:220px" aria-label="Date du concours">${S.concours?`<button type="button" class="btn" id="cdel">Effacer</button>`:""}</div>
+    ${dl!==null?`<p><b class="num">${dl>0?`J-${dl}`:dl===0?"C'est aujourd'hui":"Date passée"}</b></p>`:""}</section>
+  <section class="panel"><h3>Objectif quotidien</h3>
+    <p class="muted">Nombre de réponses à donner chaque jour pour faire grandir ta série. La session du jour s'y adapte.</p>
+    <div class="chips" id="goal">${[10,20,40,60].map(n=>`<button type="button" class="chip" data-g="${n}" aria-pressed="${S.goal===n}">${n}</button>`).join("")}</div></section>
+  <section class="panel"><h3>Remettre à zéro</h3>
+    <p class="muted">Efface tes résultats (QCM, cartes, cas, activité, examens blancs) sur cet appareil et sur ton compte.</p>
+    <div class="confirm" id="reset"><button type="button" class="btn" id="reset-ask">Réinitialiser ma progression</button></div></section>`;
+}
+function bindReglages(){
+  $("#thm").onclick = e => { const b=e.target.closest("[data-th]"); if(b){ setTheme(b.dataset.th); render(); } };
+  $("#cdate").onchange = e => { S.concours = e.target.value || ""; save(); render(); };
+  const cd = $("#cdel"); if(cd) cd.onclick = () => { S.concours = ""; save(); render(); };
   $("#goal").onclick = e => { const b=e.target.closest("[data-g]"); if(b){ S.goal=+b.dataset.g; save(); render(); } };
   $("#reset-ask").addEventListener("click", () => {
     $("#reset").innerHTML = `<span>Tout effacer ?</span><button type="button" class="btn primary" id="reset-yes">Oui, effacer</button><button type="button" class="btn" id="reset-no">Annuler</button>`;
@@ -180,7 +288,9 @@ function bindAccueil(){
 
 /* ---------- QCM ---------- */
 let quiz = null;
-let qcmSetup = {n:10, mode:"all", off:[], srcOpen:false};
+let qcmSetup = {n:10, mode:"all", off:[], ...S.qcm, srcOpen:false, pform:false};
+const saveSetup = () => { S.qcm = {n:qcmSetup.n, mode:qcmSetup.mode, off:[...qcmSetup.off]}; save(); };
+const curCfg = () => ({themes:activeThemes(), n:qcmSetup.n, mode:qcmSetup.mode, off:[...qcmSetup.off]});
 /* Référentiel d'une question : source citée en fin d'explication (variantes de nom regroupées) */
 const SRC_ALIAS = {"GTO Lutte contre les FDF et espaces naturels 2021":"GTO Lutte contre les feux de forêts et d'espaces naturels 2021", "GDO SSUAP 2022":"GDO Secours et soins d'urgence aux personnes 2022"};
 const NOSRC = "Notions générales (sans référentiel)";
@@ -228,7 +338,10 @@ function vQcm(){
       <div class="chips" id="qn">${[10,20,999].map(n=>`<button type="button" class="chip" data-n="${n}" aria-pressed="${qcmSetup.n===n}">${n===999?"Toutes":n}</button>`).join("")}</div>
       <span class="label">Questions</span>
       <div class="chips" id="qm">${[["all","Toutes"],["due","À revoir aujourd'hui"],["new","Jamais vues"],["err","Mes erreurs"]].map(([k,v])=>`<button type="button" class="chip" data-m="${k}" aria-pressed="${qcmSetup.mode===k}">${v}</button>`).join("")}</div>
-      <div><button type="button" class="btn primary" id="qgo">Commencer</button></div>
+      <div class="row"><button type="button" class="btn primary" id="qgo">Commencer</button>${qcmSetup.pform?"":`<button type="button" class="btn" id="psave">☆ Garder ces réglages en favori</button>`}</div>
+      ${qcmSetup.pform?`<form class="row" id="pform"><input class="field" id="pname" maxlength="40" value="${esc(cfgName(curCfg()))}" aria-label="Nom du favori" style="max-width:320px"><button class="btn primary">Enregistrer</button><button type="button" class="btn" id="pcancel">Annuler</button></form>`:""}
+      ${S.presets.length?`<span class="label">Mes favoris — un toucher pour lancer</span><div class="presets">${S.presets.map((f,i)=>`<span class="preset"><button type="button" class="chip" data-p="${i}" title="${esc(cfgName(f))}">★ ${esc(f.name)}</button><button type="button" class="pdel" data-pdel="${i}" aria-label="Supprimer le favori ${esc(f.name)}">×</button></span>`).join("")}</div>`:""}
+      <p class="muted" style="font-size:.85rem">Tes réglages sont gardés en mémoire pour la prochaine fois.</p>
     </div>`;
   if(quiz.empty) return `<div class="empty">Aucune question ne correspond à ce choix.<br><br><button type="button" class="btn" id="qback">Changer les réglages</button></div>`;
   if(quiz.i >= quiz.items.length){
@@ -254,7 +367,7 @@ function vQcm(){
     <p class="question">${q.q}</p>
     <div class="opts">${opts}</div>
     ${done?`<div class="explain ${good?"":"no"}" role="status"><b>${good?"✓ Bonne réponse":"✗ Mauvaise réponse"}</b>${good?"":`<p class="ans">Ta réponse : ${q.o[quiz.picked]}</p><p class="ans ok">Bonne réponse : ${q.o[0]}</p>`}${explainBody(q)}</div>
-    <div class="row"><button type="button" class="btn primary" id="qnext">${quiz.i+1<n?"Question suivante":"Voir le résultat"}</button><span class="muted" style="font-size:.85rem">Touche Entrée</span></div>`:`<p class="muted" style="font-size:.85rem">Touches 1 à 4 pour répondre.</p>`}
+    <div class="row"><button type="button" class="btn primary" id="qnext">${quiz.i+1<n?"Question suivante":"Voir le résultat"}</button><span class="muted kbd-hint" style="font-size:.85rem">Touche Entrée</span></div>`:`<p class="muted kbd-hint" style="font-size:.85rem">Touches 1 à 4 pour répondre.</p>`}
     <div><button type="button" class="btn" id="qstop">Arrêter le quiz</button></div>
   </section>`;
 }
@@ -287,20 +400,30 @@ function pick(oi){
 function next(){ if(quiz&&quiz.picked!==null){ quiz.i++; quiz.picked=null; render(); } }
 function bindQcm(){
   bindChips(render);
-  const qn=$("#qn"); if(qn) qn.onclick=e=>{const b=e.target.closest("[data-n]"); if(b){qcmSetup.n=+b.dataset.n; render();}};
-  const qm=$("#qm"); if(qm) qm.onclick=e=>{const b=e.target.closest("[data-m]"); if(b){qcmSetup.mode=b.dataset.m; render();}};
+  const qn=$("#qn"); if(qn) qn.onclick=e=>{const b=e.target.closest("[data-n]"); if(b){qcmSetup.n=+b.dataset.n; saveSetup(); render();}};
+  const qm=$("#qm"); if(qm) qm.onclick=e=>{const b=e.target.closest("[data-m]"); if(b){qcmSetup.mode=b.dataset.m; saveSetup(); render();}};
   const qs=$("#qsrc"); if(qs){
     qs.ontoggle=()=>{ qcmSetup.srcOpen=qs.open; };
-    qs.onchange=e=>{ const v=e.target.value; if(!v) return; const o=qcmSetup.off.filter(k=>k!==v); qcmSetup.off = e.target.checked ? o : [...o, v]; qcmSetup.srcOpen=true; render(); };
+    qs.onchange=e=>{ const v=e.target.value; if(!v) return; const o=qcmSetup.off.filter(k=>k!==v); qcmSetup.off = e.target.checked ? o : [...o, v]; qcmSetup.srcOpen=true; saveSetup(); render(); };
     qs.onclick=e=>{
       const b=e.target.closest("[data-sall],[data-snone]"); if(!b) return;
       const t=b.dataset.sall||b.dataset.snone, keys=[...qs.querySelectorAll("input")].map(i=>i.value).filter(k=>k.startsWith(t+"|"));
       qcmSetup.off = qcmSetup.off.filter(k=>!keys.includes(k)); if(b.dataset.snone) qcmSetup.off.push(...keys);
-      qcmSetup.srcOpen=true; render();
+      qcmSetup.srcOpen=true; saveSetup(); render();
     };
-    const cl=$("#qsrc-clear"); if(cl) cl.onclick=()=>{ qcmSetup.off=[]; render(); };
+    const cl=$("#qsrc-clear"); if(cl) cl.onclick=()=>{ qcmSetup.off=[]; saveSetup(); render(); };
   }
-  const go=$("#qgo"); if(go) go.onclick=()=>{ startQuiz(activeThemes(),qcmSetup.n,qcmSetup.mode,qcmSetup.off); render(); };
+  const go=$("#qgo"); if(go) go.onclick=()=>launch(curCfg());
+  const ps=$("#psave"); if(ps) ps.onclick=()=>{ qcmSetup.pform=true; render(); const i=$("#pname"); if(i){ i.focus(); i.select(); } };
+  const pf=$("#pform"); if(pf) pf.onsubmit=e=>{
+    e.preventDefault();
+    const name = $("#pname").value.trim() || cfgName(curCfg());
+    S.presets = [...S.presets.filter(f=>f.name!==name), {name, ...curCfg()}].slice(-8);
+    qcmSetup.pform=false; save(); render();
+  };
+  const pc=$("#pcancel"); if(pc) pc.onclick=()=>{ qcmSetup.pform=false; render(); };
+  document.querySelectorAll("[data-p]").forEach(b=>b.onclick=()=>launch(S.presets[+b.dataset.p]));
+  document.querySelectorAll("[data-pdel]").forEach(b=>b.onclick=()=>{ S.presets.splice(+b.dataset.pdel,1); save(); render(); });
   document.querySelectorAll(".opt").forEach(b=>b.onclick=()=>pick(+b.dataset.oi));
   const nx=$("#qnext"); if(nx){ nx.onclick=next; nx.focus({preventScroll:true}); }
   const st=$("#qstop"); if(st) st.onclick=()=>{ quiz=null; render(); };
@@ -333,7 +456,7 @@ function vCartes(){
     <div class="qhead"><span class="label">${badge(c.t)} ${TH[c.t].n}</span><span class="num muted">${deck.i+1} / ${deck.items.length}</span></div>
     <div class="flash ${deck.flip?"on":""}" id="flash" role="button" tabindex="0" aria-label="Retourner la carte">
       <div class="flash-in">
-        <div class="face"><span class="label">Question</span><div class="big">${c.f}</div><span class="muted" style="font-size:.85rem">Clique ou appuie sur Espace pour retourner</span></div>
+        <div class="face"><span class="label">Question</span><div class="big">${c.f}</div><span class="muted" style="font-size:.85rem">Touche la carte pour la retourner<span class="kbd-hint"> (ou Espace)</span></span></div>
         <div class="face back"><span class="label">Réponse</span><div class="ans">${c.b}</div></div>
       </div>
     </div>
@@ -419,12 +542,16 @@ const noteFr = n => String(n).replace(".", ",");
 function startExam(){
   const pool = shuffle(visQ()).slice(0, exSetup.n);
   exam = {items:pool.map(q=>({q, order:shuffle(q.o.map((_,i)=>i)), a:null})), i:0, start:Date.now(), end:Date.now()+exSetup.min*60000, min:exSetup.min, done:false, confirm:false};
-  clearInterval(exTimer);
+  runExamTimer();
+}
+function runExamTimer(){
+  clearInterval(exTimer); let k = 0;
   exTimer = setInterval(() => {
     if(!exam || exam.done){ clearInterval(exTimer); return; }
     const left = exam.end - Date.now();
     if(left <= 0){ finishExam(true); return; }
     const el = $("#extime"); if(el){ el.textContent = fmtTime(left); el.classList.toggle("low", left < 60000); }
+    if(++k % 10 === 0) saveRun(); // temps restant gardé toutes les 5 s
   }, 500);
 }
 function finishExam(timeout){
@@ -484,7 +611,7 @@ function vExamen(){
     <div class="progress"><i style="width:${100*answered/n}%"></i></div>
     <p class="question">${q.q}</p>
     <div class="opts">${it.order.map((oi,k)=>`<button type="button" class="opt ${it.a===oi?"sel":""}" data-oi="${oi}" aria-pressed="${it.a===oi}"><kbd>${k+1}</kbd><span>${q.o[oi]}</span></button>`).join("")}</div>
-    <div class="row"><button type="button" class="btn" id="exprev" ${exam.i?"":"disabled"}>Précédente</button><button type="button" class="btn ${it.a!==null?"primary":""}" id="exnext" ${exam.i<n-1?"":"disabled"}>Suivante</button><span class="muted" style="font-size:.85rem">Touches 1 à 4, flèches ← →</span></div>
+    <div class="row"><button type="button" class="btn" id="exprev" ${exam.i?"":"disabled"}>Précédente</button><button type="button" class="btn ${it.a!==null?"primary":""}" id="exnext" ${exam.i<n-1?"":"disabled"}>Suivante</button><span class="muted kbd-hint" style="font-size:.85rem">Touches 1 à 4, flèches ← →</span></div>
     <div class="qgrid" id="exgrid" aria-label="Aller à la question">${exam.items.map((x,k)=>`<button type="button" data-k="${k}" class="${x.a!==null?"done":""} ${k===exam.i?"cur":""}" aria-label="Question ${k+1}${x.a!==null?", répondue":""}">${k+1}</button>`).join("")}</div>
     <div class="confirm">${exam.confirm
       ? `<span>${n-answered} question${n-answered>1?"s":""} sans réponse. Rendre quand même ?</span><button type="button" class="btn primary" id="exyes">Rendre la copie</button><button type="button" class="btn" id="exno">Continuer</button>`
@@ -507,12 +634,46 @@ function bindExamen(){
 }
 
 /* ---------- Rendu ---------- */
-const VIEWS = {accueil:[vAccueil,bindAccueil], qcm:[vQcm,bindQcm], cartes:[vCartes,bindCartes], fiches:[vFiches,bindFiches], cas:[vCas,bindCas], examen:[vExamen,bindExamen]};
+const VIEWS = {accueil:[vAccueil,bindAccueil], qcm:[vQcm,bindQcm], cartes:[vCartes,bindCartes], fiches:[vFiches,bindFiches], cas:[vCas,bindCas], examen:[vExamen,bindExamen], reglages:[vReglages,bindReglages]};
 function render(){
   renderTabs();
   const [v,b] = VIEWS[route()];
   $("#view").innerHTML = v(); b();
+  saveRun();
 }
+/* Sessions en cours gardées sur l'appareil (départ en intervention, appli fermée…) puis retrouvées à la réouverture.
+   L'examen blanc garde son temps restant : le chrono est en pause tant que l'appli est fermée. */
+const QBY = new Map(ALLQ.map(q=>[q.id,q])), FBY = new Map(ALLF.map(f=>[f.id,f]));
+function saveRun(){
+  const r = {};
+  if(quizRunning()) r.quiz = {items:quiz.items.map(it=>[it.q.id,it.order]), i:quiz.i, picked:quiz.picked, score:quiz.score, wrong:quiz.wrong.map(q=>q.id), log:(quiz.log||[]).map(x=>[x.q.id,x.a])};
+  if(deck && deck.i < deck.items.length) r.deck = {ids:deck.items.map(c=>c.id), i:deck.i, flip:deck.flip, known:deck.known};
+  if(casRun && casRun.i < casRun.c.steps.length) r.cas = {id:casRun.c.id, i:casRun.i, picked:casRun.picked, score:casRun.score, order:casRun.order};
+  if(exam && !exam.done) r.exam = {items:exam.items.map(it=>[it.q.id,it.order,it.a]), i:exam.i, left:exam.end-Date.now(), min:exam.min};
+  LS.set("run", r);
+}
+function restoreRun(){
+  const r = LS.get("run", {}) || {};
+  try{
+    if(r.quiz){
+      const items = r.quiz.items.map(([id,order])=>({q:QBY.get(id), order}));
+      if(items.every(it=>it.q) && r.quiz.i < items.length) quiz = {items, i:r.quiz.i, picked:r.quiz.picked, score:r.quiz.score,
+        wrong:r.quiz.wrong.map(id=>QBY.get(id)).filter(Boolean), log:r.quiz.log.map(([id,a])=>({q:QBY.get(id), a})).filter(x=>x.q)};
+    }
+    if(r.deck){ const items = r.deck.ids.map(id=>FBY.get(id)); if(items.every(Boolean)) deck = {items, i:r.deck.i, flip:r.deck.flip, known:r.deck.known}; }
+    if(r.cas){ const c = CAS.find(x=>x.id===r.cas.id); if(c) casRun = {c, i:r.cas.i, picked:r.cas.picked, score:r.cas.score, order:r.cas.order}; }
+    if(r.exam){
+      const items = r.exam.items.map(([id,order,a])=>({q:QBY.get(id), order, a}));
+      if(items.every(it=>it.q)){
+        const left = Math.max(1000, r.exam.left), now = Date.now();
+        exam = {items, i:r.exam.i, min:r.exam.min, end:now+left, start:now+left-r.exam.min*60000, done:false, confirm:false};
+        runExamTimer();
+      }
+    }
+  }catch(e){ quiz = deck = casRun = exam = null; }
+}
+window.addEventListener("pagehide", saveRun);
+document.addEventListener("visibilitychange", () => { if(document.visibilityState==="hidden") saveRun(); });
 document.addEventListener("keydown", e => {
   if(e.target.closest("input,textarea")) return;
   const r = route();
@@ -537,5 +698,5 @@ document.addEventListener("keydown", e => {
     else if(deck.flip && e.key==="2") cardAnswer(true);
   }
 });
-window.addEventListener("hashchange", () => { render(); window.scrollTo(0,0); });
-renderObj(); render();
+window.addEventListener("hashchange", () => { moreOpen = false; render(); window.scrollTo(0,0); });
+restoreRun(); applyTheme(); renderObj(); render();

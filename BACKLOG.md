@@ -15,14 +15,14 @@ Légende : ☐ à faire · ◐ en cours · ☑ fait · 🎨 choix visuel à vali
   - lenteur au chargement.
 
 ## Phase 1 — Ergonomie (priorité)
-- ☐ **E1. Barre d'onglets fixe en bas sur mobile** 🎨 : icônes et libellés, accessible au pouce, zone sûre iPhone. Sur PC, les onglets restent en haut. Six sections pour cinq places : choisir lesquelles garder et quoi mettre dans « Plus ».
-- ☐ **E2. Session du jour en 1 clic** 🎨 : gros bouton sur l'accueil qui mélange les questions à revoir et des nouvelles, dosées selon l'objectif du jour et la date du concours.
-- ☐ **E3. Bouton « Reprendre »** : relance le dernier quiz avec les mêmes réglages.
-- ☐ **E4. Réglages QCM mémorisés** : thèmes, référentiels décochés, nombre et mode sont gardés en localStorage et synchronisés.
-- ☐ **E5. Favoris de réglages** : presets nommés, par exemple « FDF + SR · 20 q », lancés depuis l'accueil.
-- ☐ **E6. Sauver et reprendre un quiz interrompu** : un quiz, des cartes ou un cas en cours sont retrouvés à la réouverture, même après fermeture de l'app. L'examen blanc garde le temps écoulé.
-- ☐ **E7. Thème clair/sombre** : automatique par défaut, avec un bouton manuel (clair / sombre / auto) dans l'en-tête.
-- ☐ **E8. Passe lisibilité** : taille du texte, contrastes, espacements, scroll inutile, zones tactiles d'au moins 44 px, et options du QCM bien séparées.
+- ☑ **E1. Navigation mobile** — choix C : barre flottante en bas (Accueil, QCM, Cartes, Plus) + bouton rond rouge « Lancer » qui démarre la session du jour (« Continuer » si un quiz est en cours). « Plus » ouvre Fiches, Cas pratiques, Examen blanc, Réglages, Compte. Sur PC, onglets en haut.
+- ☑ **E2. Session du jour** — choix A : grosse carte en tête d'accueil (nombre de questions, X à revoir / Y nouvelles, durée estimée, J-N, bouton Commencer, objectif du jour et série). 10 à 20 questions selon ce qui reste de l'objectif. Le dosage selon la date du concours viendra avec N2.
+- ☑ **E3. « Relancer le dernier quiz »** sur l'accueil, avec les mêmes réglages.
+- ☑ **E4. Réglages QCM mémorisés** (nombre, mode, référentiels décochés ; thèmes déjà gardés), synchronisés avec le compte.
+- ☑ **E5. Favoris de réglages** : « ☆ Garder ces réglages en favori » dans le QCM (8 au maximum), lancés en un toucher depuis l'accueil ou le QCM, supprimables, synchronisés.
+- ☑ **E6. Sessions interrompues** : quiz, cartes, cas et examen blanc gardés sur l'appareil et retrouvés à la réouverture (bandeau « … en cours · Continuer » sur l'accueil). Le chrono de l'examen est en pause pendant que l'appli est fermée. Non synchronisé entre appareils.
+- ☑ **E7. Thème** : bouton dans l'en-tête (auto → clair → sombre) et choix dans Réglages. Propre à chaque appareil.
+- ☑ **E8. Passe lisibilité (1er passage)** : boutons ≥ 44 px, réponses plus grandes, en-tête compact sur téléphone, indications clavier masquées sur écran tactile, page Réglages séparée (thème, date, objectif, remise à zéro). À reprendre selon les retours.
 
 ## Phase 2 — Fonctions quiz
 - ☐ **Q1. Raccourcis clavier (PC)** :
@@ -31,15 +31,15 @@ Légende : ☐ à faire · ◐ en cours · ☑ fait · 🎨 choix visuel à vali
   - F pour mettre en favori, S pour signaler.
 - ☐ **Q2. Signaler une question** : bouton « erreur / doute » avec un commentaire facultatif. Les signalements sont listés dans une page « Mes signalements » et exportables en texte à copier pour correction. Ils restent stockés en local, sans Supabase pour l'instant.
 - ☐ **Q3. Favoris** : une étoile sur chaque question, et un mode de quiz « Mes favoris ».
-- ☐ **Q4. Indice de confiance** 🎨 : choix « Sûr / Hésitant ». Une bonne réponse hésitante n'avance pas dans les boîtes de Leitner, ou revient plus vite.
+- ☐ **Q4. Indice de confiance** — choix A validé : la question « Sûr / Hésitant » n'apparaît qu'après une bonne réponse. : choix « Sûr / Hésitant ». Une bonne réponse hésitante n'avance pas dans les boîtes de Leitner, ou revient plus vite.
 - ☐ **Q5. Chrono par question** : mode vitesse avec 30 s par question par défaut, réglable. Le temps écoulé compte comme une erreur.
 - ☐ **Q6. Mode « mort subite »** : on enchaîne les questions jusqu'à la première erreur, avec un record par thème.
 - ☐ **Q7. Mieux expliquer la révision espacée** : afficher « X à revoir aujourd'hui » et, sur chaque question, pourquoi elle revient (boîte N, prochaine révision le…).
 
 ## Phase 3 — Suivi du niveau et date du concours
-- ☐ **N1. Date du concours** : saisie dans les réglages, avec un compte à rebours sur l'accueil.
+- ◐ **N1. Date du concours** : saisie dans Réglages et compte à rebours J-N sur la carte du jour (fait). Reste : l'utiliser pour N2 et N6.
 - ☐ **N2. Révisions adaptées à la date** : plus le concours approche, plus les intervalles se resserrent pour que tout soit revu avant la date. La part de nouvelles questions augmente quand il reste beaucoup de questions jamais vues.
-- ☐ **N3. Score de préparation (%)** 🎨 : jauge globale calculée sur la maîtrise par thème, la couverture des questions vues et les notes aux examens blancs. Afficher le détail du calcul.
+- ☐ **N3. Score de préparation (%)** — choix A validé : jauge ronde + détail par thème. : jauge globale calculée sur la maîtrise par thème, la couverture des questions vues et les notes aux examens blancs. Afficher le détail du calcul.
 - ☐ **N4. Points faibles** : liste des thèmes et référentiels au plus faible taux de réussite, avec un bouton « Travailler ça » qui lance le quiz ciblé.
 - ☐ **N5. Courbe des examens blancs** : évolution des notes sur 20 dans le temps.
 - ☐ **N6. Plan semaine par semaine** : objectifs automatiques jusqu'à la date, par exemple « cette semaine : FDF + SR, 1 examen blanc », recalculés selon les points faibles.
@@ -47,7 +47,7 @@ Légende : ☐ à faire · ◐ en cours · ☑ fait · 🎨 choix visuel à vali
 
 ## Phase 4 — Motivation
 - ☐ **M1. Série et objectif du jour plus visibles** : ils existent déjà, à mettre en avant sur l'accueil.
-- ☐ **M2. Grades pompier** 🎨 : grades débloqués selon la progression (sapeur, caporal, caporal-chef, sergent…), avec un écusson.
+- ☐ **M2. Grades pompier** — choix A validé : écusson du grade + barre vers le grade suivant. : grades débloqués selon la progression (sapeur, caporal, caporal-chef, sergent…), avec un écusson.
 - ☐ **M3. Classement CIS** : entre collègues, via Supabase (table de scores et RLS). Demander s'il faut un pseudo ou un prénom.
 - ☐ **M4. Rappel quotidien** : notification « N questions à revoir » quand l'app est installée sur le téléphone (PWA). Limite : sur iPhone, il faut iOS 16.4 ou plus et l'app ajoutée à l'écran d'accueil.
 
@@ -76,3 +76,4 @@ Légende : ☐ à faire · ◐ en cours · ☑ fait · 🎨 choix visuel à vali
 - ☑ Correction détaillée en fin de quiz et d'examen.
 - ☑ Filtre par référentiel, groupé par thème, tout coché par défaut, avec boutons « tout » / « aucun » (commit 675205f).
 - ☑ Lots 1 à 8 : 573 questions.
+- ☑ Phase 1 Ergonomie (E1 à E8), 2026-11-07, service worker rsp-v18.

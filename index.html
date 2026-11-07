@@ -12,6 +12,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <link rel="stylesheet" href="css/style.css">
+<script>try{var t=JSON.parse(localStorage.getItem("rsp:theme"));if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
 </head>
 <body>
 <header class="band">
@@ -23,7 +24,11 @@
         <p>QCM · cartes mémoire · fiches · cas pratiques</p>
       </div>
     </div>
-    <div class="obj" role="group" aria-label="Objectif de révision" id="obj"></div>
+    <div class="hdr">
+      <div class="obj" role="group" aria-label="Objectif de révision" id="obj"></div>
+      <button type="button" class="hbtn" id="theme-btn" aria-label="Thème"></button>
+      <a class="hbtn" href="#reglages" aria-label="Réglages" title="Réglages"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></a>
+    </div>
   </div>
 </header>
 <div class="stripes" aria-hidden="true"></div>
@@ -31,8 +36,9 @@
 <main class="wrap" id="view"></main>
 <footer class="wrap note">
   <p>Contenu de départ rédigé à partir des notions générales (PSE, GNR, guides de doctrine). Les procédures et valeurs peuvent varier selon les référentiels en vigueur et ton SDIS : vérifie toujours avec tes supports de formation officiels.</p>
-  <p>Ta progression est enregistrée sur cet appareil, et synchronisée entre tes appareils quand tu es connecté (onglet « Se connecter »).</p>
+  <p>Ta progression est enregistrée sur cet appareil, et synchronisée entre tes appareils quand tu es connecté (« Se connecter », dans le menu « Plus » sur téléphone).</p>
 </footer>
+<nav class="bnav" id="bnav" aria-label="Navigation rapide"></nav>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="js/config.js"></script>
 <script src="js/data.js"></script>
