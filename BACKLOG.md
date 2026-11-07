@@ -31,7 +31,7 @@ Légende : ☐ à faire · ◐ en cours · ☑ fait · 🎨 choix visuel à vali
   - F pour mettre en favori, S pour signaler.
 - ☐ **Q2. Signaler une question** : bouton « erreur / doute » avec un commentaire facultatif. Les signalements sont listés dans une page « Mes signalements » et exportables en texte à copier pour correction. Ils restent stockés en local, sans Supabase pour l'instant.
 - ☐ **Q3. Favoris** : une étoile sur chaque question, et un mode de quiz « Mes favoris ».
-- ☐ **Q4. Indice de confiance** — choix A validé : la question « Sûr / Hésitant » n'apparaît qu'après une bonne réponse. : choix « Sûr / Hésitant ». Une bonne réponse hésitante n'avance pas dans les boîtes de Leitner, ou revient plus vite.
+- ☐ **Q4. Indice de confiance** — choix A validé : la question « Sûr / Hésitant » n'apparaît qu'après une bonne réponse. Une bonne réponse hésitante n'avance pas dans les boîtes de Leitner, ou revient plus vite.
 - ☐ **Q5. Chrono par question** : mode vitesse avec 30 s par question par défaut, réglable. Le temps écoulé compte comme une erreur.
 - ☐ **Q6. Mode « mort subite »** : on enchaîne les questions jusqu'à la première erreur, avec un record par thème.
 - ☐ **Q7. Mieux expliquer la révision espacée** : afficher « X à revoir aujourd'hui » et, sur chaque question, pourquoi elle revient (boîte N, prochaine révision le…).
@@ -39,7 +39,7 @@ Légende : ☐ à faire · ◐ en cours · ☑ fait · 🎨 choix visuel à vali
 ## Phase 3 — Suivi du niveau et date du concours
 - ◐ **N1. Date du concours** : saisie dans Réglages et compte à rebours J-N sur la carte du jour (fait). Reste : l'utiliser pour N2 et N6.
 - ☐ **N2. Révisions adaptées à la date** : plus le concours approche, plus les intervalles se resserrent pour que tout soit revu avant la date. La part de nouvelles questions augmente quand il reste beaucoup de questions jamais vues.
-- ☐ **N3. Score de préparation (%)** — choix A validé : jauge ronde + détail par thème. : jauge globale calculée sur la maîtrise par thème, la couverture des questions vues et les notes aux examens blancs. Afficher le détail du calcul.
+- ☐ **N3. Score de préparation (%)** — choix A validé : jauge ronde + détail par thème. Jauge globale calculée sur la maîtrise par thème, la couverture des questions vues et les notes aux examens blancs. Afficher le détail du calcul.
 - ☐ **N4. Points faibles** : liste des thèmes et référentiels au plus faible taux de réussite, avec un bouton « Travailler ça » qui lance le quiz ciblé.
 - ☐ **N5. Courbe des examens blancs** : évolution des notes sur 20 dans le temps.
 - ☐ **N6. Plan semaine par semaine** : objectifs automatiques jusqu'à la date, par exemple « cette semaine : FDF + SR, 1 examen blanc », recalculés selon les points faibles.
@@ -47,7 +47,7 @@ Légende : ☐ à faire · ◐ en cours · ☑ fait · 🎨 choix visuel à vali
 
 ## Phase 4 — Motivation
 - ☐ **M1. Série et objectif du jour plus visibles** : ils existent déjà, à mettre en avant sur l'accueil.
-- ☐ **M2. Grades pompier** — choix A validé : écusson du grade + barre vers le grade suivant. : grades débloqués selon la progression (sapeur, caporal, caporal-chef, sergent…), avec un écusson.
+- ☐ **M2. Grades pompier** — choix A validé : écusson du grade + barre vers le grade suivant. Grades débloqués selon la progression (sapeur, caporal, caporal-chef, sergent…), avec un écusson.
 - ☐ **M3. Classement CIS** : entre collègues, via Supabase (table de scores et RLS). Demander s'il faut un pseudo ou un prénom.
 - ☐ **M4. Rappel quotidien** : notification « N questions à revoir » quand l'app est installée sur le téléphone (PWA). Limite : sur iPhone, il faut iOS 16.4 ou plus et l'app ajoutée à l'écran d'accueil.
 
