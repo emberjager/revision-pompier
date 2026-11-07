@@ -25,16 +25,13 @@ Légende : ☐ à faire · ◐ en cours · ☑ fait · 🎨 choix visuel à vali
 - ☑ **E8. Passe lisibilité (1er passage)** : boutons ≥ 44 px, réponses plus grandes, en-tête compact sur téléphone, indications clavier masquées sur écran tactile, page Réglages séparée (thème, date, objectif, remise à zéro). À reprendre selon les retours.
 
 ## Phase 2 — Fonctions quiz
-- ☐ **Q1. Raccourcis clavier (PC)** :
-  - 1–4 ou A–D pour répondre ;
-  - Entrée ou espace pour passer à la suivante ;
-  - F pour mettre en favori, S pour signaler.
-- ☐ **Q2. Signaler une question** : bouton « erreur / doute » avec un commentaire facultatif. Les signalements sont listés dans une page « Mes signalements » et exportables en texte à copier pour correction. Ils restent stockés en local, sans Supabase pour l'instant.
-- ☐ **Q3. Favoris** : une étoile sur chaque question, et un mode de quiz « Mes favoris ».
-- ☐ **Q4. Indice de confiance** — choix A validé : la question « Sûr / Hésitant » n'apparaît qu'après une bonne réponse. Une bonne réponse hésitante n'avance pas dans les boîtes de Leitner, ou revient plus vite.
-- ☐ **Q5. Chrono par question** : mode vitesse avec 30 s par question par défaut, réglable. Le temps écoulé compte comme une erreur.
-- ☐ **Q6. Mode « mort subite »** : on enchaîne les questions jusqu'à la première erreur, avec un record par thème.
-- ☐ **Q7. Mieux expliquer la révision espacée** : afficher « X à revoir aujourd'hui » et, sur chaque question, pourquoi elle revient (boîte N, prochaine révision le…).
+- ☑ **Q1. Raccourcis clavier (PC)** : 1–4 ou A–D pour répondre (QCM, cas, examen), Entrée ou Espace pour continuer, F favori, S signaler, H hésitant, Échap ferme le signalement.
+- ☑ **Q2. Signaler une question** : bouton « ⚑ Signaler » (Erreur / Doute + commentaire). Page « Mes signalements » (menu Plus et Réglages) avec « Copier la liste ». Gardé sur l'appareil seulement.
+- ☑ **Q3. Favoris** : bouton « ☆ Favori » sur chaque question, mode « ★ Mes favoris » dans le QCM et sur l'accueil. Synchronisés (le dernier geste gagne).
+- ☑ **Q4. Indice de confiance** — choix A : « Sûr / Hésitant » après une bonne réponse seulement (Sûr par défaut). Hésitant : la question reste dans sa boîte et revient plus tôt.
+- ☑ **Q5. Chrono par question** : sans, 15, 30 ou 60 s (gardé dans les réglages et les favoris). Temps écoulé = erreur. Pause quand on quitte l'écran du quiz ou l'appli.
+- ☑ **Q6. Mort subite** : mode du QCM, toutes les questions des thèmes choisis jusqu'à la première erreur. Record par thème (ou groupe de thèmes), synchronisé.
+- ☑ **Q7. Révision espacée expliquée** : avant la réponse, étiquette « Nouvelle » ou « Boîte N / 5 » avec la raison du retour ; après, la boîte suivante et la date de la prochaine révision. Compteur « À revoir aujourd'hui (N) » dans le QCM, encart explicatif sur l'accueil.
 
 ## Phase 3 — Suivi du niveau et date du concours
 - ◐ **N1. Date du concours** : saisie dans Réglages et compte à rebours J-N sur la carte du jour (fait). Reste : l'utiliser pour N2 et N6.
@@ -77,3 +74,4 @@ Légende : ☐ à faire · ◐ en cours · ☑ fait · 🎨 choix visuel à vali
 - ☑ Filtre par référentiel, groupé par thème, tout coché par défaut, avec boutons « tout » / « aucun » (commit 675205f).
 - ☑ Lots 1 à 8 : 573 questions.
 - ☑ Phase 1 Ergonomie (E1 à E8), 2026-11-07, service worker rsp-v18.
+- ☑ Phase 2 Fonctions quiz (Q1 à Q7), 2026-11-07, service worker rsp-v19.

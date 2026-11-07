@@ -289,3 +289,19 @@ a.btn{color:inherit}
   .obj{flex:1 1 auto}
   .obj button{flex:1 1 auto}
 }
+
+/* ---------- Phase 2 : fonctions quiz ---------- */
+.tag{display:inline-block;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 8px;border-radius:999px;background:var(--sunk);color:var(--ink);margin-right:4px}
+.tag.bad{background:var(--bad-soft);color:var(--bad)}
+.srs{font-size:.88rem;margin:0}
+.qtools{display:flex;flex-wrap:wrap;gap:8px}
+.btn[aria-pressed="true"]{border-color:var(--hivis);background:color-mix(in srgb,var(--hivis) 18%,var(--surface))}
+.conf{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.conf .chips{margin:0}
+.repform textarea{width:100%;resize:vertical;font:inherit}
+.qtime{display:flex;align-items:center;gap:10px}
+.qtimer{flex:1;height:8px;border-radius:999px;background:var(--sunk);overflow:hidden}
+.qtimer i{display:block;height:100%;background:var(--ok);transition:width .2s linear}
+.qtimer.low i{background:var(--bad)}
+#qtsec{min-width:3ch;text-align:right;font-weight:700}
+.linkbtn{background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit}
