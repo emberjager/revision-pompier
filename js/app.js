@@ -32,6 +32,7 @@ const S = {
   sportSex: LS.get("sportSex",""), // barème : "H" ou "F"
   mine: LS.get("mine",{}), // mes questions : id -> {t, q, o, e, src, at, del?}
   mineT: LS.get("mineT","suap"), // dernier thème choisi pour une nouvelle question
+  srcOff: LS.get("srcOff",{off:[], at:0}), // référentiels décochés dans les Réglages (exclus partout), at = date du dernier changement
   rep: LS.get("rep",[])   // signalements (gardés sur l'appareil seulement) : [{id, t, q, kind, note, at}]
 };
 const isFav = id => (S.fav[id]||0) > 0;
@@ -39,7 +40,7 @@ const isFav = id => (S.fav[id]||0) > 0;
 const OLD_TH = ["suap","inc","div","sr","fdf","cult","com"];
 const withNewThemes = (themes, known) => [...themes, ...Object.keys(TH).filter(t => !known.includes(t) && !themes.includes(t))];
 S.themes = withNewThemes(S.themes, LS.get("thk", OLD_TH)); LS.set("thk", Object.keys(TH));
-const KEYS = ["obj","themes","qp","fp","cp","fs","days","goal","ex","qcm","presets","last","concours","fav","sd","rep","lb","mine","mineT","oral","oralT","sport","sportSex"];
+const KEYS = ["obj","themes","qp","fp","cp","fs","days","goal","ex","qcm","presets","last","concours","fav","sd","rep","lb","mine","mineT","oral","oralT","sport","sportSex","srcOff"];
 const save = () => { KEYS.forEach(k => LS.set(k, S[k])); if (window.onLocalSave) window.onLocalSave(); motivCheck(); renderStreak(); };
 
 /* ---------- Répétition espacée et activité du jour ----------
@@ -72,7 +73,9 @@ function streak(){
 }
 
 const lvOk = x => S.obj==="tous" || !x.l || x.l.split(" ").includes(S.obj);
-const visQ = () => ALLQ.filter(lvOk);
+const lvQ = () => ALLQ.filter(lvOk);
+/* Référentiels décochés dans les Réglages : leurs questions disparaissent de partout (si tout est décoché, on garde tout). */
+const visQ = () => { const off = S.srcOff.off, l = lvQ(); if(!off.length) return l; const r = l.filter(q => q.mine || !off.includes(srcOf(q))); return r.length ? r : l; };
 const visF = () => ALLF.filter(lvOk);
 const themesForLevel = () => Object.keys(TH).filter(t => visQ().some(q=>q.t===t));
 const activeThemes = () => { const avail = themesForLevel(); const sel = S.themes.filter(t=>avail.includes(t)); return sel.length?sel:avail; };
@@ -903,6 +906,7 @@ function vReglages(){
   <section class="panel"><h3>Objectif quotidien</h3>
     <p class="muted">Nombre de réponses à donner chaque jour pour faire grandir ta série. La session du jour s'y adapte.</p>
     <div class="chips" id="goal">${[10,20,40,60].map(n=>`<button type="button" class="chip" data-g="${n}" aria-pressed="${S.goal===n}">${n}</button>`).join("")}</div></section>
+  ${srcPanel()}
   ${remindPanel()}
   <section class="panel"><h3>Remettre à zéro</h3>
     <p class="muted">Efface tes résultats (QCM, cartes, cas, activité, examens blancs) sur cet appareil et sur ton compte.</p>
@@ -918,7 +922,7 @@ function bindReglages(){
   $("#thm").onclick = e => { const b=e.target.closest("[data-th]"); if(b){ setTheme(b.dataset.th); render(); } };
   $("#cdate").onchange = e => { S.concours = e.target.value || ""; save(); render(); };
   const cd = $("#cdel"); if(cd) cd.onclick = () => { S.concours = ""; save(); render(); };
-  bindRemind();
+  bindRemind(); bindSrcPanel();
   $("#goal").onclick = e => { const b=e.target.closest("[data-g]"); if(b){ S.goal=+b.dataset.g; save(); render(); } };
   $("#reset-ask").addEventListener("click", () => {
     $("#reset").innerHTML = `<span>Tout effacer ?</span><button type="button" class="btn primary" id="reset-yes">Oui, effacer</button><button type="button" class="btn" id="reset-no">Annuler</button>`;
@@ -972,7 +976,36 @@ const curCfg = () => ({themes:activeThemes(), n:qcmSetup.n, mode:qcmSetup.mode, 
 /* Référentiel d'une question : source citée en fin d'explication (variantes de nom regroupées) */
 const SRC_ALIAS = {"GTO Lutte contre les FDF et espaces naturels 2021":"GTO Lutte contre les feux de forêts et d'espaces naturels 2021", "GDO SSUAP 2022":"GDO Secours et soins d'urgence aux personnes 2022"};
 const NOSRC = "Notions générales (sans référentiel)";
-function srcOf(q){ if(q.mine) return MINE_SRC; const s = splitE(q.e).src; return s ? (SRC_ALIAS[s]||s) : NOSRC; }
+const SRC_MEMO = new WeakMap();
+function srcOf(q){ if(q.mine) return MINE_SRC; let s = SRC_MEMO.get(q); if(s === undefined){ s = splitE(q.e).src; s = s ? (SRC_ALIAS[s]||s) : NOSRC; SRC_MEMO.set(q, s); } return s; }
+/* Réglages : choix des référentiels travaillés, regroupés par type */
+const SRC_KIND = [["GTO","Guides de techniques opérationnelles (GTO)"],["GDO","Guides de doctrine opérationnelle (GDO)"],["AUT","Autres supports"],["NOS","Sans référentiel"]];
+const srcKind = s => s===NOSRC ? "NOS" : /^GTO /.test(s) ? "GTO" : /^GDO /.test(s) ? "GDO" : "AUT";
+function srcPanel(){
+  const c = {}; lvQ().forEach(q => { if(!q.mine){ const s = srcOf(q); c[s] = (c[s]||0)+1; } });
+  const off = S.srcOff.off, all = Object.keys(c), offN = all.filter(s => off.includes(s));
+  const tot = all.reduce((a,s)=>a+c[s],0), nb = tot - offN.reduce((a,s)=>a+c[s],0);
+  const box = s => `<label class="srcopt"><input type="checkbox" value="${esc(s)}" ${off.includes(s)?"":"checked"}><span>${esc(s)}</span><small class="num">${c[s]}</small></label>`;
+  const blocks = SRC_KIND.map(([k,n]) => { const l = all.filter(s=>srcKind(s)===k).sort((a,b)=>a.localeCompare(b,"fr")); if(!l.length) return "";
+    return `<div class="srcgrp"><p class="label">${n}${l.length>1?`<span class="srcall"><button type="button" data-gall="${k}">tout</button> · <button type="button" data-gnone="${k}">aucun</button></span>`:""}</p>${l.map(box).join("")}</div>`; }).join("");
+  return `<section class="panel"><h3>Référentiels travaillés</h3>
+    <p class="muted">Décoche un GTO, un GDO ou un support pour ne plus avoir ses questions : QCM, examen blanc, révision du jour et statistiques. Ta progression sur ces questions est gardée ; recoche pour les retrouver.</p>
+    <details class="fiche corr srcpick" id="rsrc" ${srcOpen?"open":""}><summary>${offN.length?`${nb} / ${tot} questions · ${offN.length} référentiel${offN.length>1?"s":""} décoché${offN.length>1?"s":""}`:`Tous les référentiels · ${tot} questions`}</summary>
+    <div class="srclist">${blocks}
+    ${offN.length===all.length?`<p class="muted">Tout est décoché : toutes les questions restent proposées.</p>`:""}
+    ${offN.length?`<div><button type="button" class="btn" id="rsrc-clear">Tout recocher</button></div>`:""}</div></details></section>`;
+}
+let srcOpen = false;
+const setSrcOff = off => { S.srcOff = {off:[...new Set(off)], at:Date.now()}; srcOpen = true; save(); render(); };
+function bindSrcPanel(){
+  const d = $("#rsrc"); if(!d) return;
+  d.ontoggle = () => { srcOpen = d.open; };
+  d.onchange = e => { const v = e.target.value; if(!v) return; const o = S.srcOff.off.filter(s=>s!==v); setSrcOff(e.target.checked ? o : [...o, v]); };
+  d.onclick = e => { const b = e.target.closest("[data-gall],[data-gnone]"); if(!b) return; const k = b.dataset.gall||b.dataset.gnone;
+    const ks = [...new Set(lvQ().filter(q=>!q.mine).map(srcOf))].filter(s=>srcKind(s)===k);
+    const o = S.srcOff.off.filter(s=>!ks.includes(s)); setSrcOff(b.dataset.gnone ? [...o, ...ks] : o); };
+  const cl = $("#rsrc-clear"); if(cl) cl.onclick = () => setSrcOff([]);
+}
 /* Clé « thème|référentiel » : on mémorise les référentiels décochés (tout est coché par défaut) */
 const srcKey = q => q.t+"|"+srcOf(q);
 function srcOptions(){
@@ -988,7 +1021,7 @@ function srcOptions(){
     if(!l.length) return "";
     return `<div class="srcgrp"><p class="label">${badge(t)} ${TH[t].n}<span class="srcall"><button type="button" data-sall="${t}">tout</button> · <button type="button" data-snone="${t}">aucun</button></span></p>${l.map(box).join("")}</div>`;
   }).join("");
-  return `<details class="fiche corr srcpick" id="qsrc" ${qcmSetup.srcOpen?"open":""}><summary>${offK.length?`${nb} / ${tot} questions · ${offK.length} référentiel${offK.length>1?"s":""} décoché${offK.length>1?"s":""}`:`Tous les référentiels des thèmes choisis · ${tot} questions`}</summary>
+  return `<details class="fiche corr srcpick" id="qsrc" ${qcmSetup.srcOpen?"open":""}><summary>${offK.length?`${nb} / ${tot} questions · ${offK.length} référentiel${offK.length>1?"s":""} décoché${offK.length>1?"s":""}`:`Tous les référentiels des thèmes choisis · ${tot} questions`}${S.srcOff.off.length?` · <a href="#reglages">${S.srcOff.off.length} masqué${S.srcOff.off.length>1?"s":""} dans les Réglages</a>`:""}</summary>
     <div class="srclist">${blocks}
     ${offK.length?`<div><button type="button" class="btn" id="qsrc-clear">Tout recocher</button></div>`:""}</div></details>`;
 }
