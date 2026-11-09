@@ -44,11 +44,17 @@ function mergeData(remote){
   if(Array.isArray(remote.sport)){ const m = new Map(S.sport.map(x=>[x.at,x])); for(const x of remote.sport){ if(!x || typeof x.at!=="number") continue; const l = m.get(x.at); if(!l || x.del) m.set(x.at, x); } S.sport = [...m.values()].sort((a,b)=>a.at-b.at).slice(-200); }
   // Référentiels décochés dans les Réglages : le changement le plus récent gagne.
   if(remote.srcOff && Array.isArray(remote.srcOff.off) && (remote.srcOff.at||0) > (S.srcOff.at||0)) S.srcOff = {off:remote.srcOff.off, at:remote.srcOff.at};
+  // Semaine à thème : la semaine la plus récente gagne ; même semaine = la première calculée (pas de changement de thème en cours de semaine).
+  if(remote.wk && remote.wk.mon && Array.isArray(remote.wk.focus)){ const l = S.wk;
+    if(!l || remote.wk.mon > l.mon || (remote.wk.mon === l.mon && (remote.wk.at||0) < (l.at||0))) S.wk = {...remote.wk, seen: !!(remote.wk.seen || (l && l.mon === remote.wk.mon && l.seen))};
+    else if(remote.wk.mon === l.mon && remote.wk.seen) l.seen = true; }
+  // Rattrapage : un jour déjà planifié sur un appareil garde ce plan.
+  if(remote.plan && typeof remote.plan === "object") for(const [d,v] of Object.entries(remote.plan)) if(v && typeof v.t === "number" && !S.plan[d]) S.plan[d] = v;
   if(remote.sportSex==="H" || remote.sportSex==="F") S.sportSex = remote.sportSex;
   if(typeof remote.lb === "number" && Math.abs(remote.lb) > Math.abs(S.lb||0)) S.lb = remote.lb;
   if(Array.isArray(remote.presets)){ const names = new Set(S.presets.map(p=>p.name)); S.presets = [...S.presets, ...remote.presets.filter(p=>p && !names.has(p.name))].slice(-8); }
 }
-const payload = () => ({obj:S.obj, themes:S.themes, qp:S.qp, fp:S.fp, cp:S.cp, fs:S.fs, days:S.days, goal:S.goal, ex:S.ex, thk:Object.keys(TH), concours:S.concours, qcm:S.qcm, last:S.last, presets:S.presets, fav:S.fav, sd:S.sd, lb:S.lb, mine:S.mine, oral:S.oral, oralT:S.oralT, sport:S.sport, sportSex:S.sportSex, srcOff:S.srcOff});
+const payload = () => ({obj:S.obj, themes:S.themes, qp:S.qp, fp:S.fp, cp:S.cp, fs:S.fs, days:S.days, goal:S.goal, ex:S.ex, thk:Object.keys(TH), concours:S.concours, qcm:S.qcm, last:S.last, presets:S.presets, fav:S.fav, sd:S.sd, lb:S.lb, mine:S.mine, oral:S.oral, oralT:S.oralT, sport:S.sport, sportSex:S.sportSex, srcOff:S.srcOff, wk:S.wk, plan:S.plan});
 
 let pushTimer = null, applying = false;
 async function push(){

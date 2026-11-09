@@ -426,3 +426,16 @@ a.btn{color:inherit}
 .ocrit > div:first-child{display:grid;gap:2px;min-width:0}
 .ocrit small{color:var(--muted);font-size:.85rem}
 .ocrit .chip{min-width:2.6em;justify-content:center}
+/* Phase 7 : thème de la semaine, rattrapage, bilan hebdo */
+.wkline{margin:0;display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
+.carry{margin:4px 0 0;font-size:.9rem;padding:6px 10px;border-radius:8px;background:var(--bad-soft)}
+.bilan{gap:14px;border:2px solid var(--ok)}
+.bilan p{margin:0}
+.bstats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.bstats > div{display:grid;gap:2px;background:var(--sunk);border-radius:8px;padding:10px 12px}
+.bstats b{font-size:1.4rem}
+.bstats small{font-size:.9rem;color:var(--muted)}
+.bstats span{font-size:.85rem;color:var(--muted)}
+.bstats i{font-style:normal;font-weight:700}
+.bstats i.up{color:var(--ok)} .bstats i.down{color:var(--bad)}
+.bweak{margin:6px 0 0;padding-left:1.4em;display:grid;gap:4px}

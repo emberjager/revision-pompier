@@ -33,6 +33,8 @@ const S = {
   mine: LS.get("mine",{}), // mes questions : id -> {t, q, o, e, src, at, del?}
   mineT: LS.get("mineT","suap"), // dernier thème choisi pour une nouvelle question
   srcOff: LS.get("srcOff",{off:[], at:0}), // référentiels décochés dans les Réglages (exclus partout), at = date du dernier changement
+  wk: LS.get("wk",null),  // semaine à thème : {mon, focus:[thèmes], final, hist, snap:{s,m}, prev:{bilan de la semaine passée}, seen, at}
+  plan: LS.get("plan",{}), // rattrapage : "AAAA-MM-JJ" -> {t: réponses prévues ce jour-là, c: dont rattrapage}
   rep: LS.get("rep",[])   // signalements (gardés sur l'appareil seulement) : [{id, t, q, kind, note, at}]
 };
 const isFav = id => (S.fav[id]||0) > 0;
@@ -40,7 +42,7 @@ const isFav = id => (S.fav[id]||0) > 0;
 const OLD_TH = ["suap","inc","div","sr","fdf","cult","com"];
 const withNewThemes = (themes, known) => [...themes, ...Object.keys(TH).filter(t => !known.includes(t) && !themes.includes(t))];
 S.themes = withNewThemes(S.themes, LS.get("thk", OLD_TH)); LS.set("thk", Object.keys(TH));
-const KEYS = ["obj","themes","qp","fp","cp","fs","days","goal","ex","qcm","presets","last","concours","fav","sd","rep","lb","mine","mineT","oral","oralT","sport","sportSex","srcOff"];
+const KEYS = ["obj","themes","qp","fp","cp","fs","days","goal","ex","qcm","presets","last","concours","fav","sd","rep","lb","mine","mineT","oral","oralT","sport","sportSex","srcOff","wk","plan"];
 const save = () => { KEYS.forEach(k => LS.set(k, S[k])); if (window.onLocalSave) window.onLocalSave(); motivCheck(); renderStreak(); };
 
 /* ---------- Répétition espacée et activité du jour ----------
@@ -197,8 +199,71 @@ function dayPlan(){
   const need = dl>0 && fresh ? Math.min(fresh, Math.ceil(fresh / Math.max(1, dl-7))) : 0;
   const n = Math.min(Math.max(base, Math.min(40, Math.min(due, base) + need)), due + fresh);
   const nf = Math.min(fresh, n - Math.min(due, need ? base : n, n));
-  return {n, due:n-nf, fresh:nf, need, min:Math.max(1, Math.round(n*0.5))};
+  const p = {n, due:n-nf, fresh:nf, need};
+  // Rattrapage : ce qui était prévu les jours précédents et n'a pas été fait s'ajoute à la session.
+  const pl = planToday(p.n), left = Math.max(0, pl.t - done);
+  let dT = p.due, fT = p.fresh;
+  if(left > p.n){ const ex = left - p.n; dT = Math.min(due, p.due + ex); fT = Math.min(fresh, left - dT); }
+  const tot = dT + fT;
+  return {n:tot, due:dT, fresh:fT, need, carry:Math.min(pl.c, Math.max(0, tot - p.n)), miss:pl.miss||[], min:Math.max(1, Math.round(tot*0.5))};
 }
+/* Rattrapage : le jour où l'appli est ouverte, on note les réponses prévues (session + rattrapage).
+   Le lendemain, ce qui manque est reporté ; un jour sans ouvrir l'appli compte comme une session normale manquée (7 jours au plus, 60 questions au plus). */
+const CARRY_MAX = 60;
+function carryIn(){
+  const t = today(), past = Object.keys(S.plan).filter(d => d < t).sort();
+  if(!past.length) return {c:0, miss:[]};
+  const last = past[past.length-1], p = S.plan[last], miss = [];
+  let c = Math.max(0, p.t - (S.days[last]||0)); if(c) miss.push([last, c]);
+  const base = Math.max(10, (p.t - (p.c||0)) || 10);
+  for(let d = addDays(last, 1), k = 0; d < t && k < 7; d = addDays(d, 1), k++){
+    const m = Math.max(0, base - (S.days[d]||0)); if(m){ c += m; miss.push([d, m]); }
+  }
+  return {c:Math.min(c, CARRY_MAX), miss};
+}
+function planToday(n0){
+  const t = today();
+  if(!S.plan[t]){
+    const ci = carryIn(), done = S.days[t]||0;
+    S.plan[t] = {t: done + n0 + ci.c, c: ci.c, miss: ci.miss};
+    const keep = addDays(t, -30); for(const d of Object.keys(S.plan)) if(d < keep) delete S.plan[d];
+    LS.set("plan", S.plan); if(window.onLocalSave) window.onLocalSave();
+  }
+  return S.plan[t];
+}
+/* Semaine à thème : chaque lundi, les 2 thèmes les plus faibles (score de préparation) qui n'ont pas été au programme récemment.
+   Le roulement fait passer tout le programme ; la dernière semaine avant le concours = révision générale. */
+function pickFocus(order, hist){
+  const k = Math.max(1, Math.ceil(order.length/2) - 1), recent = new Set(hist.slice(-k).flat());
+  const pick = order.filter(t => !recent.has(t));
+  return (pick.length >= 2 ? pick : order).slice(0, 2);
+}
+const focusOrder = r => r.themes.filter(t=>t.n).sort((a,b)=>a.s-b.s).map(t=>t.t);
+const masteredN = () => visQ().filter(q=>boxOf(S.qp[q.id])>=MASTER).length;
+const isFinalWeek = mon => !!S.concours && dayDiff(mon, S.concours) <= 7 && dayDiff(mon, S.concours) >= 0;
+function weekTheme(){
+  const mon = mondayOf(today()), w = S.wk;
+  if(w && w.mon === mon){
+    const av = themesForLevel();
+    if(w.final || w.focus.every(t => av.includes(t))) return w; // thèmes toujours au programme du niveau choisi
+  }
+  const r = readiness(), m = masteredN();
+  let prev = w && w.mon === mon ? w.prev : null;
+  if(w && w.mon < mon && w.snap){
+    const end = addDays(w.mon, 6), inW = d => d >= w.mon && d <= end;
+    const act = Object.entries(S.days).filter(([d]) => inW(d));
+    const ex = S.ex.filter(e => inW(dayKey(new Date(e.d))));
+    prev = {mon:w.mon, focus:w.focus, final:!!w.final, ans:act.reduce((a,[,v])=>a+v, 0), days:act.filter(([,v])=>v>0).length,
+      ex:ex.length, exAvg: ex.length ? Math.round(10*ex.reduce((a,e)=>a+e.note,0)/ex.length)/10 : null,
+      s0:w.snap.s, s1:r.s, m0:w.snap.m, m1:m, goal:S.goal};
+  }
+  const hist = w ? (w.mon === mon ? (w.hist||[]) : [...(w.hist||[]), w.focus||[]].slice(-12)) : [];
+  const final = isFinalWeek(mon);
+  S.wk = {mon, focus: final ? [] : pickFocus(focusOrder(r), hist), final, hist, snap: w && w.mon === mon ? w.snap : {s:r.s, m}, prev, seen: w && w.mon === mon ? w.seen : !prev, at: Date.now()};
+  LS.set("wk", S.wk); if(window.onLocalSave) window.onLocalSave();
+  return S.wk;
+}
+const focusNames = f => f.map(t => `${badge(t)} ${TH[t].n}`).join(" et ");
 const daysLeft = () => S.concours ? Math.round((new Date(S.concours+"T12:00:00") - new Date(today()+"T12:00:00"))/864e5) : null;
 const MODES = {all:"toutes", due:"à revoir", new:"jamais vues", err:"mes erreurs", fav:"mes favoris", mine:"mes questions", sd:"mort subite", weak:"points faibles"};
 function cfgName(c){
@@ -232,7 +297,7 @@ function vAccueil(){
   const dueCards = fs.filter(f=>isDue(S.fs[f.id])).length;
   const done = S.days[today()]||0, st = streak();
   const lastEx = S.ex[S.ex.length-1];
-  const p = dayPlan(), dl = daysLeft();
+  const wt = weekTheme(), p = dayPlan(), dl = daysLeft();
   const jx = dl===null ? `<a class="jx add" href="#reglages">+ date du concours</a>` : dl>0 ? `<span class="jx" title="Jours avant le concours">J-${dl}</span>` : dl===0 ? `<span class="jx">Jour J</span>` : "";
   const rows = themesForLevel().map(t => {
     const tq = qs.filter(q=>q.t===t);
@@ -245,10 +310,12 @@ function vAccueil(){
   const quick = (S.last ? `<button type="button" class="qbtn" data-last><span class="qi">${ICON.redo}</span><span><b>Relancer le dernier quiz</b><small>${esc(cfgName(S.last))}</small></span></button>` : "")
     + S.presets.map((f,i)=>`<button type="button" class="qbtn" data-p="${i}"><span class="qi">${ICON.star}</span><span><b>${esc(f.name)}</b>${f.name!==cfgName(f)?`<small>${esc(cfgName(f))}</small>`:""}</span></button>`).join("");
   return `
+  ${wt.prev && !wt.seen ? bilanHtml(wt, true) : ""}
   <section class="panel daycard">
     <div class="day-top"><span class="label">Session du jour · ${LV[S.obj]}</span>${jx}</div>
+    ${wt.final ? `<p class="wkline"><b>Dernière semaine :</b> révision générale, pas de thème imposé.</p>` : wt.focus.length ? `<p class="wkline"><span class="label">Thème de la semaine</span> ${focusNames(wt.focus)}</p>` : ""}
     ${p.n ? `<div><div class="day-n num">${p.n}<span> questions</span></div>
-      <p class="day-mix">${p.due?`<b class="due">${p.due} à revoir</b>`:"0 à revoir"} · ${p.fresh} nouvelle${p.fresh>1?"s":""} · ≈ ${p.min} min</p>${p.need?`<p class="muted" style="font-size:.85rem">Pour tout voir une semaine avant le concours : ${p.need} nouvelle${p.need>1?"s":""} par jour.</p>`:""}</div>
+      <p class="day-mix">${p.due?`<b class="due">${p.due} à revoir</b>`:"0 à revoir"} · ${p.fresh} nouvelle${p.fresh>1?"s":""} · ≈ ${p.min} min</p>${p.carry?`<p class="carry">Dont <b>${p.carry} question${p.carry>1?"s":""} de rattrapage</b> : ${p.miss.length===1?`prévue${p.carry>1?"s":""} ${fmtDay(p.miss[0][0])}`:`prévues sur ${p.miss.length} jours`}, pas encore faite${p.carry>1?"s":""}.</p>`:""}${p.need?`<p class="muted" style="font-size:.85rem">Pour tout voir une semaine avant le concours : ${p.need} nouvelle${p.need>1?"s":""} par jour.</p>`:""}</div>
       <button type="button" class="btn primary big" data-quiz="day">Commencer</button>`
     : `<p class="lead">Tout est à jour : rien à revoir aujourd'hui et toutes les questions ont été vues. Fais un quiz rapide ou un examen blanc.</p>
       <button type="button" class="btn primary big" data-quiz="mix">Quiz rapide · 10 questions</button>`}
@@ -294,6 +361,7 @@ function bindAccueil(){
     else startQuiz([k],10,"all");
     go("qcm");
   }));
+  const bo = $("#bilan-ok"); if(bo) bo.onclick = () => { S.wk.seen = true; save(); render(); };
   const gc = $("#go-cards"); if(gc) gc.onclick = () => { cardMode="todo"; startDeck(); go("cartes"); };
   const lb = document.querySelector("[data-last]"); if(lb) lb.onclick = () => launch(S.last);
   document.querySelectorAll("[data-p]").forEach(b => b.onclick = () => launch(S.presets[+b.dataset.p]));
@@ -342,7 +410,7 @@ const mondayOf = k => addDays(k, -((new Date(k+"T12:00:00").getDay()+6)%7));
 const shortDay = k => new Date(k+"T12:00:00").toLocaleDateString("fr-FR", {day:"numeric", month:"short"});
 function weekPlan(){
   const dl = daysLeft(); if(dl===null || dl<1) return null;
-  const r = readiness(), order = r.themes.filter(t=>t.n).sort((a,b)=>a.s-b.s).map(t=>t.t);
+  const r = readiness(), order = focusOrder(r), wt = weekTheme(), hist = [...(wt.hist||[])];
   const unseen = r.n - r.seen, last = addDays(S.concours, -1), mon = mondayOf(today());
   const perDay = unseen ? Math.ceil(unseen / Math.max(1, dl - 7)) : 0; // tout découvrir une semaine avant
   const weeks = []; let left = unseen;
@@ -352,7 +420,8 @@ function weekPlan(){
     const days = dayDiff(from, to) + 1, final = dayDiff(from, S.concours) <= 7;
     const newQ = final ? 0 : Math.min(left, perDay * days); left -= newQ;
     const exams = final ? 1 : dayDiff(from, S.concours) > 56 ? 1 : 2;
-    const focus = [...new Set(order.length ? [order[(2*i) % order.length], order[(2*i+1) % order.length]] : [])];
+    let focus = [];
+    if(!final){ focus = i ? pickFocus(order, hist) : wt.focus; hist.push(focus); }
     weeks.push({i, from, to, days, final, newQ, exams, focus});
   }
   const ansWeek = Object.entries(S.days).filter(([d]) => d >= mon).reduce((a,[,v])=>a+v, 0);
@@ -387,7 +456,7 @@ function vNiveau(){
         <div class="week-top"><b>${w.i===0?"Cette semaine":w.final?"Dernière semaine":`Semaine ${w.i+1}`}</b><span class="muted num">${shortDay(w.from)} → ${shortDay(w.to)}</span></div>
         ${w.final ? `<p><b>Dernière ligne droite.</b> Pas de nouvelles questions : révisions du jour, tes erreurs et tes favoris. Un dernier examen blanc 2 ou 3 jours avant le concours.</p>`
         : `<ul class="calc">
-          ${w.focus.length?`<li>En priorité : ${w.focus.map(t=>`${badge(t)} ${TH[t].n}`).join(" et ")}</li>`:""}
+          ${w.focus.length?`<li>Thème de la semaine : ${focusNames(w.focus)}${w.i===0?"":" (prévision)"}</li>`:""}
           <li>${w.newQ ? `${w.newQ} nouvelles questions à découvrir (≈ ${Math.ceil(w.newQ/w.days)} par jour)` : "Toutes les questions sont vues : place aux révisions"}</li>
           <li>${exS(w.exams)}</li></ul>`}
         ${w.i===0 ? `<p class="muted" style="font-size:.9rem">Fait : <b class="num">${wp.ansWeek}</b> / ${wp.target} réponses · <b class="num">${wp.exWeek}</b> / ${exS(w.exams)}</p>` : ""}
@@ -406,6 +475,7 @@ function vNiveau(){
       <p class="muted">Le score de chaque thème suit la même règle, sans les examens : maîtrise 75 %, couverture 25 %.</p></details>
   </section>
   ${gradeSection()}
+  ${weekTheme().prev ? `<section style="display:grid;gap:10px"><h3>Semaine passée</h3>${bilanHtml(weekTheme(), false)}</section>` : ""}
   <section style="display:grid;gap:10px"><h3>Par thème</h3><div class="panel tlines">${rows}</div></section>
   <section style="display:grid;gap:10px"><h3>Points faibles</h3>
     ${weak.length ? `<div class="themes weak">${weak.map(g => `<div class="trow"><div class="name"><div>${wkName(g.k)}<small>${pc(g.r)} % de bonnes réponses · ${pl(g.q, "question")} vue${g.q>1?"s":""}</small></div></div><div class="bar"><i style="width:${pc(g.r)}%"></i></div><button type="button" class="btn" data-work="${esc(g.k)}">Travailler ça</button></div>`).join("")}</div>
@@ -421,6 +491,28 @@ function vNiveau(){
 }
 function bindNiveau(){
   document.querySelectorAll("[data-work]").forEach(b => b.onclick = () => workOn(b.dataset.work));
+}
+/* Bilan de la semaine passée : affiché sur l'accueil le lundi (jusqu'à « Vu »), et toujours dans Mon niveau. */
+function bilanHtml(w, home){
+  const b = w.prev, d = b.s1 - b.s0, dm = b.m1 - b.m0, weak = weakPoints().slice(0, 5), wp = weekPlan(), w0 = wp && wp.weeks[0];
+  const sg = v => v > 0 ? "+"+v : String(v), pl = (n, x) => `${n} ${x}${n>1?"s":""}`;
+  const wkName = k => k.includes("|") ? `${badge(k.split("|")[0])} ${esc(k.slice(k.indexOf("|")+1))}` : `${badge(k)} ${TH[k].n}`;
+  return `<section class="panel bilan">
+    <div class="day-top"><span class="label">Bilan de la semaine</span><span class="muted num">${shortDay(b.mon)} → ${shortDay(addDays(b.mon, 6))}</span></div>
+    <div class="bstats">
+      <div><b class="num">${b.ans}</b><span>réponses (objectif ${b.goal*7})</span></div>
+      <div><b class="num">${b.days}<small> / 7</small></b><span>jours travaillés</span></div>
+      <div><b class="num">${b.s1} %</b><span>prêt · <i class="${d>0?"up":d<0?"down":""}">${sg(d)} pts</i></span></div>
+      <div><b class="num">${b.m1}</b><span>maîtrisées · <i class="${dm>0?"up":dm<0?"down":""}">${sg(dm)}</i></span></div>
+    </div>
+    <p class="muted" style="font-size:.9rem">${b.final ? "Semaine de révision générale" : b.focus && b.focus.length ? `Thème : ${focusNames(b.focus)}` : ""}${b.ex ? ` · ${pl(b.ex, "examen blanc")}, moyenne ${noteFr(b.exAvg)} / 20` : " · aucun examen blanc"}</p>
+    ${weak.length ? `<div><b>Tes 5 points faibles</b><ol class="bweak">${weak.map(g => `<li>${wkName(g.k)} <span class="muted">· ${Math.round(100*g.r)} %</span></li>`).join("")}</ol></div>` : ""}
+    <div><b>Cette semaine</b><ul class="calc">
+      ${w.final ? "<li>Révision générale : tes erreurs, tes favoris et les questions à revoir</li>" : w.focus.length ? `<li>Thème : ${focusNames(w.focus)}</li>` : ""}
+      ${w0 && w0.newQ ? `<li>${w0.newQ} nouvelles questions (≈ ${Math.ceil(w0.newQ/w0.days)} par jour)</li>` : ""}
+      <li>${w0 ? pl(w0.exams, "examen blanc") : "1 examen blanc"}</li></ul></div>
+    ${home ? `<div class="row"><button type="button" class="btn primary" id="bilan-ok">Vu, c'est parti</button><a class="btn" href="#niveau">Voir mon niveau</a></div>` : ""}
+  </section>`;
 }
 /* Carte compacte de l'accueil */
 function prepMini(){
@@ -1067,10 +1159,11 @@ function startQuiz(themes, n, mode, off, t, fmt){
   if(mode==="day"){
     // Révisions du jour : d'abord les questions arrivées à échéance (les plus en retard en premier), puis des nouvelles.
     const dueAll = shuffle(pool.filter(q=>isDue(S.qp[q.id]))).sort((a,b)=>S.qp[a.id].due<S.qp[b.id].due?-1:S.qp[a.id].due>S.qp[b.id].due?1:0);
-    const d = dueAll.slice(0, Math.min(n, dayPlan().due)), f = shuffle(pool.filter(q=>!S.qp[q.id])).slice(0, n-d.length);
+    const foc = weekTheme().focus, fr = pool.filter(q=>!S.qp[q.id]);
+    const d = dueAll.slice(0, Math.min(n, dayPlan().due)), f = [...shuffle(fr.filter(q=>foc.includes(q.t))), ...shuffle(fr.filter(q=>!foc.includes(q.t)))].slice(0, n-d.length);
     pool = shuffle([...d, ...f, ...dueAll.slice(d.length, d.length + n - d.length - f.length)]);
   }
-  pool = shuffle(pool).slice(0,n);
+  pool = mode==="day" ? pool.slice(0,n) : shuffle(pool).slice(0,n);
   quiz = pool.length ? {items:pool.map(q=>mkItem(q, fmt)), i:0, picked:null, score:0, wrong:[], t:t||0} : {empty:true};
   if(mode==="sd" && !quiz.empty){ quiz.sd = sdKey(themes); quiz.rec0 = S.sd[quiz.sd]||0; }
 }
