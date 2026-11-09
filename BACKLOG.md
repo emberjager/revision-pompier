@@ -67,7 +67,7 @@ Réponses de l'utilisateur : garder les deux voies (externe classique = QCM math
 - ☑ **R5. Annales officielles** (fait pour 2023 : js/annales.js, 4 sujets, correction proposée avec doutes signalés, lien PDF public sapeurs-pompiers35.fr ; reste les annales 2021 et notes 2025 à télécharger par l’utilisateur) : sujets 2023 du SDIS 35 (externe et externe ouvert aux SPV, PDF dans cours/annales, non publiés) puis annales 2021 et notes de cadrage 2025 d'agirhe-concours.fr (à télécharger par l'utilisateur, le site bloque les robots). Mode « sujet officiel » : chrono 1 h, correction, note.
 - ☑ **R6. Maths illimitées** : exercices générés avec des chiffres différents à chaque fois (débits, autonomie, conversions, vitesses, pourcentages, aires/volumes), réponse calculée par le code.
 - ☑ **R7. Étude de texte** (fait : 2 sujets 2023 externe et SPV ; textes d’entraînement Licence Ouverte encore à proposer) : QCM sur un texte. Annales (questions + lien PDF) ; textes d'entraînement possibles sous Licence Ouverte (rapports et sites publics) à proposer à l'utilisateur.
-- ☐ **R8. Fiches synthèse par GTO/GDO** : une page par référentiel avec les chiffres clés, tirée des PDF de cours/ (toujours sourcée). Ne pas toucher aux fiches existantes (C4 en attente).
+- ☑ **R8. Fiches synthèse par GTO/GDO** : une page par référentiel avec les chiffres clés, tirée des PDF de cours/ (toujours sourcée). Ne pas toucher aux fiches existantes (C4 en attente). → Fait : js/synth.js (13 référentiels, 136 chiffres clés repris des explications sourcées), section « Synthèses par référentiel » en bas de Fiches. Note : le GTO FDF varie sur le seuil CCFM/CCFS (14 t p. 15, 16 t dans le tableau des capacités).
 
 ## Phase T — Technique (en parallèle)
 - ☐ **T1. Chargement plus rapide** :

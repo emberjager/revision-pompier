@@ -1502,7 +1502,13 @@ function vFiches(){
   const list = FICHES.filter(lvOk).filter(f=>act.includes(f.t));
   return `<section style="display:grid;gap:8px"><span class="label">Fiches · ${LV[S.obj]}</span><h2>Fiches de cours</h2><p class="lead">L'essentiel à connaître par thème. Ouvre une fiche, relis-la, puis vérifie-toi avec le quiz du thème.</p></section>
   ${themeChips()}
-  <div style="display:grid;gap:10px">${list.map((f,i)=>`<details class="fiche" id="fiche-${i}"><summary>${badge(f.t)}<h3>${f.n}</h3></summary><div class="body">${f.h}<div><button type="button" class="btn" data-quiz="${f.t}">Quiz ${TH[f.t].n}</button></div></div></details>`).join("") || `<div class="empty">Aucune fiche pour ce choix.</div>`}</div>`;
+  <div style="display:grid;gap:10px">${list.map((f,i)=>`<details class="fiche" id="fiche-${i}"><summary>${badge(f.t)}<h3>${f.n}</h3></summary><div class="body">${f.h}<div><button type="button" class="btn" data-quiz="${f.t}">Quiz ${TH[f.t].n}</button></div></div></details>`).join("") || `<div class="empty">Aucune fiche pour ce choix.</div>`}</div>
+  ${synthSection()}`;
+}
+function synthSection(){
+  if(typeof SYNTH==="undefined"||!SYNTH.length) return "";
+  return `<section style="display:grid;gap:8px;margin-top:18px"><span class="label">Chiffres clés</span><h2>Synthèses par référentiel</h2><p class="lead">Les valeurs à connaître, regroupées par GTO/GDO. Toutes viennent du référentiel cité ; en cas de doute, c'est le texte officiel qui fait foi.</p></section>
+  <div style="display:grid;gap:10px">${SYNTH.map(x=>`<details class="fiche synth" id="synth-${x.id}"><summary><h3>${x.ref}</h3></summary><div class="body">${x.g.map(([t,l])=>`<h4>${t}</h4><ul>${l.map(i=>`<li>${i}</li>`).join("")}</ul>`).join("")}<p class="muted" style="margin:0;font-size:.85rem">Source : ${x.ref}.</p></div></details>`).join("")}</div>`;
 }
 function bindFiches(){
   bindChips(render);
