@@ -58,6 +58,17 @@ Légende : ☐ à faire · ◐ en cours · ☑ fait · 🎨 choix visuel à vali
 - ☑ **C7. Formulations qui changent** (2026-11-09, rsp-v27) : js/var.js (QVAR, id → {v,a,w,r}) donne à chacune des 809 questions 2 autres formulations, des mauvaises réponses en plus qui tournent, parfois une autre formulation de la bonne réponse, et 33 questions « à l'envers » (25 % de chance). view(q, sd) tire une version au hasard ; sd est enregistré pour reprendre une session ou revoir la correction à l'identique. Les nouvelles questions doivent recevoir leurs variantes dans js/var.js (id = thème + hash du texte d'origine : modifier le texte d'une question casse le lien).
 - ☑ **C8. Référentiels travaillés dans les Réglages** (2026-11-09, rsp-v28) : une case par GTO / GDO / support (groupes GTO, GDO, autres, sans référentiel ; tout/aucun par groupe). S.srcOff = {off:[noms], at} synchronisé (le plus récent gagne). Filtré dans visQ(), donc QCM, examen blanc, révision du jour et statistiques l'appliquent ; si tout est décoché on garde tout. « Mes questions » ne sont jamais filtrées. Les cartes (FDATA) n'ont pas de source et ne sont pas concernées.
 
+## Phase 7 — Révision optimale (questionnaire du 2026-11-09)
+Réponses de l'utilisateur : garder les deux voies (externe classique = QCM maths + QCM sur texte ; externe ouvert aux SPV = QCM SPV + QCM sur texte) ; session 2027 (1re épreuve le jeudi 25 novembre 2027, arrêté du 28 avril 2026) ; temps de révision très variable (gardes) ; annales = questions et corrigés dans le site + lien vers le PDF officiel (le texte d'origine n'est pas recopié). Montrer une maquette avant chaque nouvel écran.
+- ☐ **R1. Semaines à thème** : thème(s) de la semaine choisis automatiquement selon les points faibles, rotation sur tout le programme, dernière semaine = révision générale + examen blanc. Évolution de weekPlan().
+- ☐ **R2. Rattrapage obligatoire** : les questions prévues un jour non travaillé s'ajoutent à la session du lendemain (pas de jours de garde à déclarer).
+- ☐ **R3. Bilan de la semaine** : chaque lundi, ce qui a été fait, les progrès, les 5 points faibles, le programme de la semaine.
+- ☐ **R4. Plusieurs bonnes réponses** : questions où il faut cocher toutes les bonnes réponses (QCM « actif/passif » des notes de cadrage). Barème à lire dans les notes de cadrage, ne pas l'inventer.
+- ☐ **R5. Annales officielles** : sujets 2023 du SDIS 35 (externe et externe ouvert aux SPV, PDF dans cours/annales, non publiés) puis annales 2021 et notes de cadrage 2025 d'agirhe-concours.fr (à télécharger par l'utilisateur, le site bloque les robots). Mode « sujet officiel » : chrono 1 h, correction, note.
+- ☐ **R6. Maths illimitées** : exercices générés avec des chiffres différents à chaque fois (débits, autonomie, conversions, vitesses, pourcentages, aires/volumes), réponse calculée par le code.
+- ☐ **R7. Étude de texte** : QCM sur un texte. Annales (questions + lien PDF) ; textes d'entraînement possibles sous Licence Ouverte (rapports et sites publics) à proposer à l'utilisateur.
+- ☐ **R8. Fiches synthèse par GTO/GDO** : une page par référentiel avec les chiffres clés, tirée des PDF de cours/ (toujours sourcée). Ne pas toucher aux fiches existantes (C4 en attente).
+
 ## Phase T — Technique (en parallèle)
 - ☐ **T1. Chargement plus rapide** :
   - ne charger que les graisses de police utilisées et précharger ;
