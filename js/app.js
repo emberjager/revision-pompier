@@ -1,6 +1,7 @@
 /* ---------- Préparation des données ---------- */
 const hash = s => { let h=0; for (const c of s) h=(h*31 + c.charCodeAt(0))|0; return (h>>>0).toString(36); };
-const ALLQ = Object.entries(QDATA).flatMap(([t,arr]) => arr.map(x => ({...x, t, id:t+"-"+hash(x.q)})));
+const QV = typeof QVAR === "object" && QVAR || {}; // variantes de formulation (js/var.js), rangées par identifiant
+const ALLQ = Object.entries(QDATA).flatMap(([t,arr]) => arr.map(x => { const id = t+"-"+hash(x.q); return {...x, ...(QV[id]||{}), t, id}; }));
 const ALLF = Object.entries(FDATA).flatMap(([t,arr]) => arr.map(([f,b,opt]) => ({f,b,t,l:opt&&opt.l,id:t+"-"+hash(f)})));
 
 /* ---------- Stockage local ---------- */
@@ -75,7 +76,19 @@ const visQ = () => ALLQ.filter(lvOk);
 const visF = () => ALLF.filter(lvOk);
 const themesForLevel = () => Object.keys(TH).filter(t => visQ().some(q=>q.t===t));
 const activeThemes = () => { const avail = themesForLevel(); const sel = S.themes.filter(t=>avail.includes(t)); return sel.length?sel:avail; };
-const shuffle = a => { a=[...a]; for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; };
+const shuffle = (a, rnd=Math.random) => { a=[...a]; for(let i=a.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; };
+const seeded = sd => () => { sd = (sd + 0x6D2B79F5) | 0; let x = Math.imul(sd ^ sd >>> 15, 1 | sd); x = x + Math.imul(x ^ x >>> 7, 61 | x) ^ x; return ((x ^ x >>> 14) >>> 0) / 4294967296; };
+/* Formulation tirée au hasard : v = autres façons de poser la question, a = autres façons d'écrire la bonne réponse,
+   w = mauvaises réponses en réserve, r = [question à l'envers, [bonne réponse, mauvaises...]].
+   La graine sd permet de retrouver la même formulation après un rechargement. L'identifiant ne change pas. */
+function view(q, sd){
+  if(!q || !(q.v || q.a || q.w || q.r)) return q;
+  if(sd == null) sd = Math.floor(Math.random() * 2147483647);
+  const rnd = seeded(sd), pick = a => a[Math.floor(rnd() * a.length)];
+  if(q.r && rnd() < .25) return {...q, q:q.r[0], o:q.r[1], base:q, sd};
+  const bad = shuffle(q.o.slice(1).concat(q.w || []), rnd).slice(0, q.o.length - 1);
+  return {...q, q:pick([q.q, ...(q.v || [])]), o:[pick([q.o[0], ...(q.a || [])]), ...bad], base:q, sd};
+}
 const $ = s => document.querySelector(s);
 const badge = t => `<span class="code">${TH[t].k}</span>`;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -920,7 +933,7 @@ function repText(){
   return `Signalements — Révisions SP (${S.rep.length})\n\n` + S.rep.map((r,i)=>{
     const q = QBY.get(r.id);
     return `${i+1}. [${KIND[r.kind]||r.kind}] ${TH[r.t]?TH[r.t].k:r.t} · ${r.q}\n`
-      + (q ? `   Bonne réponse affichée : ${q.o[0]}\n` + (splitE(q.e).src ? `   Source : ${splitE(q.e).src}\n` : "") : "   (question retirée depuis)\n")
+      + (q ? `   Bonne réponse affichée : ${r.a||q.o[0]}\n` + (splitE(q.e).src ? `   Source : ${splitE(q.e).src}\n` : "") : "   (question retirée depuis)\n")
       + (r.note ? `   Commentaire : ${r.note}\n` : "")
       + `   Réf. ${r.id} · ${new Date(r.at).toLocaleDateString("fr-FR")}`;
   }).join("\n\n");
@@ -931,7 +944,7 @@ function vSignalements(){
   ${S.rep.length ? `<div class="row"><button type="button" class="btn primary" id="rcopy">Copier la liste</button><span class="muted" id="rmsg" role="status"></span></div>
     <textarea class="field" id="rtxt" readonly rows="6" hidden>${esc(repText())}</textarea>
     <ul class="errlist">${S.rep.map((r,i)=>{ const q = QBY.get(r.id); return `<li><p><span class="tag ${r.kind==="err"?"bad":""}">${KIND[r.kind]||r.kind}</span> ${TH[r.t]?badge(r.t):""} ${esc(r.q)}</p>
-      ${q?`<p class="muted">Bonne réponse affichée : ${q.o[0]}</p>`:""}${r.note?`<p>« ${esc(r.note)} »</p>`:""}
+      ${q?`<p class="muted">Bonne réponse affichée : ${r.a||q.o[0]}</p>`:""}${r.note?`<p>« ${esc(r.note)} »</p>`:""}
       <p class="muted" style="font-size:.85rem">${new Date(r.at).toLocaleDateString("fr-FR")} · <button type="button" class="linkbtn" data-rdel="${i}">Supprimer</button></p></li>`; }).join("")}</ul>
     <div class="confirm" id="rclear"><button type="button" class="btn" id="rclear-ask">Tout supprimer</button></div>`
   : `<div class="empty">Aucun signalement.<br>Pendant un quiz, touche « Signaler » (ou la touche S sur PC) si une question te paraît fausse ou douteuse.</div>`}
@@ -993,8 +1006,8 @@ function fmtFor(q, f){
   if(f==="txt") return x ? "txt" : "qcm";
   const r = Math.random(); return x && r < .3 ? "txt" : v && r >= .7 ? "vf" : "qcm"; // mélangé : 30 % à compléter (si possible), 30 % vrai/faux, le reste en QCM
 }
-function mkItem(q, f){
-  const it = {q, order:shuffle(q.o.map((_,i)=>i)), fmt:fmtFor(q, f)};
+function mkItem(q0, f){
+  const q = view(q0), it = {q, sd:q.sd, order:shuffle(q.o.map((_,i)=>i)), fmt:fmtFor(q, f)};
   if(it.fmt==="vf") it.s = Math.random() < .5 ? 0 : 1 + Math.floor(Math.random()*(q.o.length-1)); // proposition montrée : la bonne une fois sur deux
   return it;
 }
@@ -1235,7 +1248,7 @@ function bindQcm(){
   const rk=$("#qrepk"); if(rk) rk.onclick=e=>{ const b=e.target.closest("[data-k]"); if(!b) return; quiz.repKind=b.dataset.k; rk.querySelectorAll("[data-k]").forEach(x=>x.setAttribute("aria-pressed", x===b)); };
   const rf=$("#qrepf"); if(rf) rf.onsubmit=e=>{
     e.preventDefault(); const q=quiz.items[quiz.i].q;
-    S.rep = [...S.rep.filter(r=>r.id!==q.id), {id:q.id, t:q.t, q:q.q.replace(/<[^>]+>/g,""), kind:quiz.repKind==="doute"?"doute":"err", note:$("#qrepn").value.trim(), at:Date.now()}];
+    S.rep = [...S.rep.filter(r=>r.id!==q.id), {id:q.id, t:q.t, q:q.q.replace(/<[^>]+>/g,""), a:q.o[0], kind:quiz.repKind==="doute"?"doute":"err", note:$("#qrepn").value.trim(), at:Date.now()}];
     quiz.repOpen=false; save(); render();
   };
   const rc=$("#qrepc"); if(rc) rc.onclick=()=>{ quiz.repOpen=false; render(); };
@@ -1275,7 +1288,7 @@ function bindQcm(){
   const st=$("#qstop"); if(st) st.onclick=()=>{ quiz=null; render(); };
   const bk=$("#qback"); if(bk) bk.onclick=()=>{ quiz=null; render(); };
   const ag=$("#qagain"); if(ag) ag.onclick=()=>{ quiz=null; render(); };
-  const er=$("#qerr"); if(er) er.onclick=()=>{ const w=quiz.wrong; quiz={items:w.map(q=>({q,order:shuffle(q.o.map((_,i)=>i))})),i:0,picked:null,score:0,wrong:[],t:quiz.t}; render(); };
+  const er=$("#qerr"); if(er) er.onclick=()=>{ const w=quiz.wrong; quiz={items:w.map(q0=>{ const q = view(q0.base||q0); return {q, sd:q.sd, order:shuffle(q.o.map((_,i)=>i))}; }),i:0,picked:null,score:0,wrong:[],t:quiz.t}; render(); };
   qtStart();
 }
 
@@ -1396,7 +1409,7 @@ const fmtTime = ms => { const s = Math.max(0, Math.ceil(ms/1000)); return pad(Ma
 const noteFr = n => String(n).replace(".", ",");
 function startExam(){
   const pool = shuffle(exPool()).slice(0, exSetup.n);
-  exam = {f:exSetup.f, items:pool.map(q=>({q, order:shuffle(q.o.map((_,i)=>i)), a:null})), i:0, start:Date.now(), end:Date.now()+exSetup.min*60000, min:exSetup.min, done:false, confirm:false};
+  exam = {f:exSetup.f, items:pool.map(q0=>{ const q = view(q0); return {q, sd:q.sd, order:shuffle(q.o.map((_,i)=>i)), a:null}; }), i:0, start:Date.now(), end:Date.now()+exSetup.min*60000, min:exSetup.min, done:false, confirm:false};
   runExamTimer();
 }
 function runExamTimer(){
@@ -1556,24 +1569,25 @@ ROUTES.mesq = "Mes questions"; VIEWS.mesq = [vMesq, bindMesq]; VIEWS.oral = [vOr
 injectMine();
 function saveRun(){
   const r = {};
-  if(quizRunning()) r.quiz = {items:quiz.items.map(it=>[it.q.id,it.order,it.fmt||"qcm",it.s??null,it.v??null,it.vals||null,it.as||null]), i:quiz.i, picked:quiz.picked, score:quiz.score, wrong:quiz.wrong.map(q=>q.id), log:(quiz.log||[]).map(x=>[x.q.id,x.a,x.as||null]), t:quiz.t||0, sd:quiz.sd||"", rec0:quiz.rec0||0};
+  if(quizRunning()) r.quiz = {items:quiz.items.map(it=>[it.q.id,it.order,it.fmt||"qcm",it.s??null,it.v??null,it.vals||null,it.as||null,it.sd??null]), i:quiz.i, picked:quiz.picked, score:quiz.score, wrong:quiz.wrong.map(q=>q.id), log:(quiz.log||[]).map(x=>[x.q.id,x.a,x.as||null]), t:quiz.t||0, sd:quiz.sd||"", rec0:quiz.rec0||0};
   if(deck && deck.i < deck.items.length) r.deck = {ids:deck.items.map(c=>c.id), i:deck.i, flip:deck.flip, known:deck.known};
   if(casRun && casRun.i < casRun.c.steps.length) r.cas = {id:casRun.c.id, i:casRun.i, picked:casRun.picked, score:casRun.score, order:casRun.order};
-  if(exam && !exam.done) r.exam = {items:exam.items.map(it=>[it.q.id,it.order,it.a]), i:exam.i, left:exam.end-Date.now(), min:exam.min, f:exam.f||"libre"};
+  if(exam && !exam.done) r.exam = {items:exam.items.map(it=>[it.q.id,it.order,it.a,it.sd??null]), i:exam.i, left:exam.end-Date.now(), min:exam.min, f:exam.f||"libre"};
   LS.set("run", r);
 }
 function restoreRun(){
   const r = LS.get("run", {}) || {};
   try{
     if(r.quiz){
-      const items = r.quiz.items.map(([id,order,fmt,s,v,vals,as])=>({q:QBY.get(id), order, fmt:fmt||"qcm", s:s??undefined, v:v??undefined, vals:vals||undefined, as:as||null}));
+      const items = r.quiz.items.map(([id,order,fmt,s,v,vals,as,sd])=>({q:sd==null?QBY.get(id):view(QBY.get(id),sd), sd:sd??undefined, order, fmt:fmt||"qcm", s:s??undefined, v:v??undefined, vals:vals||undefined, as:as||null}));
+      const shown = id => (items.find(it=>it.q&&it.q.id===id)||{}).q || QBY.get(id); // la formulation vue pendant le quiz
       if(items.every(it=>it.q) && r.quiz.i < items.length) quiz = {items, i:r.quiz.i, picked:r.quiz.picked, score:r.quiz.score,
-        wrong:r.quiz.wrong.map(id=>QBY.get(id)).filter(Boolean), log:r.quiz.log.map(([id,a,as])=>({q:QBY.get(id), a, as})).filter(x=>x.q), t:r.quiz.t||0, sd:r.quiz.sd||undefined, rec0:r.quiz.rec0||0};
+        wrong:r.quiz.wrong.map(shown).filter(Boolean), log:r.quiz.log.map(([id,a,as])=>({q:shown(id), a, as})).filter(x=>x.q), t:r.quiz.t||0, sd:r.quiz.sd||undefined, rec0:r.quiz.rec0||0};
     }
     if(r.deck){ const items = r.deck.ids.map(id=>FBY.get(id)); if(items.every(Boolean)) deck = {items, i:r.deck.i, flip:r.deck.flip, known:r.deck.known}; }
     if(r.cas){ const c = CAS.find(x=>x.id===r.cas.id); if(c) casRun = {c, i:r.cas.i, picked:r.cas.picked, score:r.cas.score, order:r.cas.order}; }
     if(r.exam){
-      const items = r.exam.items.map(([id,order,a])=>({q:QBY.get(id), order, a}));
+      const items = r.exam.items.map(([id,order,a,sd])=>({q:sd==null?QBY.get(id):view(QBY.get(id),sd), sd:sd??undefined, order, a}));
       if(items.every(it=>it.q)){
         const left = Math.max(1000, r.exam.left), now = Date.now();
         exam = {f:r.exam.f||"libre", items, i:r.exam.i, min:r.exam.min, end:now+left, start:now+left-r.exam.min*60000, done:false, confirm:false};
