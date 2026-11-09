@@ -3,6 +3,8 @@ const hash = s => { let h=0; for (const c of s) h=(h*31 + c.charCodeAt(0))|0; re
 const QV = typeof QVAR === "object" && QVAR || {}; // variantes de formulation (js/var.js), rangées par identifiant
 const ALLQ = Object.entries(QDATA).flatMap(([t,arr]) => arr.map(x => { const id = t+"-"+hash(x.q); return {...x, ...(QV[id]||{}), t, id}; }));
 /* Cartes mémoire : une carte par question de la banque (les anciennes cartes mot-clé de FDATA ne sont plus affichées). */
+/* Questions à plusieurs bonnes réponses (js/multi.js) : format concours, on coche toutes les bonnes. ok = indices justes. */
+const MULTI = typeof QMULTI === "object" && QMULTI ? Object.entries(QMULTI).flatMap(([t,arr]) => arr.map(x => ({...x, t, id:"m-"+t+"-"+hash(x.q), multi:1}))) : [];
 const cardOf = q => ({id:"c:"+q.id, t:q.t, l:q.l, q});
 
 /* ---------- Stockage local ---------- */
@@ -81,6 +83,7 @@ const lvOk = x => S.obj==="tous" || !x.l || x.l.split(" ").includes(S.obj);
 const lvQ = () => ALLQ.filter(lvOk);
 /* Référentiels décochés dans les Réglages : leurs questions disparaissent de partout (si tout est décoché, on garde tout). */
 const visQ = () => { const off = S.srcOff.off, l = lvQ(); if(!off.length) return l; const r = l.filter(q => q.mine || !off.includes(srcOf(q))); return r.length ? r : l; };
+const visM = () => { const off = S.srcOff.off, l = MULTI.filter(lvOk); if(!off.length) return l; const r = l.filter(q => !off.includes(srcOf(q))); return r.length ? r : l; };
 const visF = () => visQ().map(cardOf);
 const themesForLevel = () => Object.keys(TH).filter(t => visQ().some(q=>q.t===t));
 const activeThemes = () => { const avail = themesForLevel(); const sel = S.themes.filter(t=>avail.includes(t)); return sel.length?sel:avail; };
@@ -1126,7 +1129,7 @@ const NEGQ = /n.est pas|ne [^?]{0,30} pas|faux|sauf|incorrect|inexact/i;
 const nNums = o => (o.match(NUMRE)||[]).length;
 const canTxt = q => !/</.test(q.o[0]) && q.o[0].length <= 40 && nNums(q.o[0]) >= 1 && nNums(q.o[0]) <= 3 && !NEGQ.test(q.q);
 const canVf = q => !q.o.some(o => /toutes|aucune|les deux|tous les|ensemble des/i.test(o));
-const FMT = {mix:"Mélangé", qcm:"QCM seul", vf:"Vrai / faux", txt:"À compléter"};
+const FMT = {mix:"Mélangé", qcm:"QCM seul", vf:"Vrai / faux", txt:"À compléter", multi:"Plusieurs réponses"};
 function fmtFor(q, f){
   if(f==="qcm") return "qcm";
   const v = canVf(q), x = canTxt(q);
@@ -1135,6 +1138,7 @@ function fmtFor(q, f){
   const r = Math.random(); return x && r < .3 ? "txt" : v && r >= .7 ? "vf" : "qcm"; // mélangé : 30 % à compléter (si possible), 30 % vrai/faux, le reste en QCM
 }
 function mkItem(q0, f){
+  if(q0.multi) return {q:q0, order:shuffle(q0.o.map((_,i)=>i)), fmt:"multi", sel:[]};
   const q = view(q0), it = {q, sd:q.sd, order:shuffle(q.o.map((_,i)=>i)), fmt:fmtFor(q, f)};
   if(it.fmt==="vf") it.s = Math.random() < .5 ? 0 : 1 + Math.floor(Math.random()*(q.o.length-1)); // proposition montrée : la bonne une fois sur deux
   return it;
@@ -1147,7 +1151,7 @@ function trous(ans){
 const numEq = (a, b) => { const x = String(a).trim().replace(/\s/g,"").replace(",","."), y = b.replace(",","."); return x !== "" && (x === y || (/^\d+(\.\d+)?$/.test(x) && parseFloat(x) === parseFloat(y))); };
 function startQuiz(themes, n, mode, off, t, fmt){
   fmt = fmt || qcmSetup.fmt || "mix";
-  let pool = visQ().filter(q=> themes.includes(q.t) && !(off||[]).includes(srcKey(q)));
+  let pool = (fmt==="multi" ? visM() : visQ()).filter(q=> themes.includes(q.t) && !(off||[]).includes(srcKey(q)));
   if(mode!=="day"){ if(fmt==="vf") pool = pool.filter(canVf); if(fmt==="txt") pool = pool.filter(canTxt); }
   if(mode==="err") pool = pool.filter(q=>S.qp[q.id]&&!S.qp[q.id].ok);
   if(mode==="new") pool = pool.filter(q=>!S.qp[q.id]);
@@ -1227,7 +1231,7 @@ function vQcm(){
       <p class="muted" style="font-size:.9rem"><a href="#mesq">✎ Ajouter mes propres questions</a> : elles entrent dans les quiz de leur thème.</p>
       <span class="label">Format des questions</span>
       <div class="chips" id="qf">${Object.entries(FMT).map(([k,v])=>`<button type="button" class="chip" data-f="${k}" aria-pressed="${(qcmSetup.fmt||"mix")===k}">${v}</button>`).join("")}</div>
-      <p class="muted" style="font-size:.9rem">${{mix:"QCM, vrai / faux et textes à trous mélangés : on retient mieux en changeant de forme.", qcm:"Quatre propositions, une seule bonne.", vf:"Une seule proposition : tu dis si c'est la bonne réponse ou non.", txt:"La bonne réponse s'affiche avec des trous à la place des chiffres (durées, distances, pressions…) : à toi de les retrouver."}[qcmSetup.fmt||"mix"]}</p>
+      <p class="muted" style="font-size:.9rem">${{mix:"QCM, vrai / faux et textes à trous mélangés : on retient mieux en changeant de forme.", qcm:"Quatre propositions, une seule bonne.", vf:"Une seule proposition : tu dis si c'est la bonne réponse ou non.", txt:"La bonne réponse s'affiche avec des trous à la place des chiffres (durées, distances, pressions…) : à toi de les retrouver.", multi:"Comme au concours : une à quatre propositions peuvent être justes. Coche toutes les bonnes, puis valide. Questions tirées des GDO et GTO."}[qcmSetup.fmt||"mix"]}</p>
       <span class="label">Chrono par question</span>
       <div class="chips" id="qt">${[[0,"Sans"],[15,"15 s"],[30,"30 s"],[60,"60 s"]].map(([k,v])=>`<button type="button" class="chip" data-tm="${k}" aria-pressed="${(qcmSetup.t||0)===k}">${v}</button>`).join("")}</div>
       ${qcmSetup.t?`<p class="muted" style="font-size:.9rem">Mode vitesse : une réponse non donnée à temps compte comme une erreur. Le chrono se met en pause si tu quittes l'appli.</p>`:""}
@@ -1269,6 +1273,13 @@ function vQcm(){
     const T = trous(q.o[0]), vals = it.vals || [];
     const hole = i => `<input class="field hole ${done ? (numEq(vals[i]||"", T.nums[i]) ? "ok" : "bad") : ""}" data-h="${i}" inputmode="decimal" autocomplete="off" enterkeyhint="done" style="width:${Math.max(3, T.nums[i].length + 2)}ch" aria-label="Valeur ${i+1} sur ${T.nums.length}" value="${done ? esc(vals[i]||"") : ""}" ${done?"disabled":""}>`;
     body = `<form class="trous" id="qtxt"><span class="label">À compléter · retrouve ${T.nums.length>1?"les valeurs":"la valeur"}</span><p class="tline-q">${T.parts.map((p,i) => p + (i < T.nums.length ? hole(i) : "")).join("")}</p>${done ? "" : `<div class="row"><button class="btn primary">Valider</button><span class="muted kbd-hint" style="font-size:.85rem">Entrée pour valider</span></div>`}</form>`;
+  } else if(fmt==="multi"){
+    const sel = it.sel || [], ok = q.ok;
+    body = `<span class="label">Plusieurs réponses possibles · coche toutes les bonnes</span><div class="opts">${it.order.map((oi,k) => {
+      const on = sel.includes(oi); let cls = "opt";
+      if(done){ if(ok.includes(oi)) cls+=" right"; else if(on) cls+=" wrong"; } else if(on) cls+=" sel";
+      return `<button type="button" class="${cls}" data-mi="${oi}" aria-pressed="${on}" ${done?"disabled":""}><kbd>${k+1}</kbd><span>${on?"☑ ":"☐ "}${q.o[oi]}</span></button>`;
+    }).join("")}</div>${done ? "" : `<div class="row"><button type="button" class="btn primary" id="qmv" ${sel.length?"":"disabled"}>Valider</button><span class="muted kbd-hint" style="font-size:.85rem">Entrée pour valider</span></div>`}`;
   } else body = `<div class="opts">${it.order.map((oi,k) => {
     let cls = "opt";
     if(done){ if(oi===0) cls+=" right"; else if(oi===quiz.picked) cls+=" wrong"; }
@@ -1284,11 +1295,11 @@ function vQcm(){
     ${done || q.gen ? "" : srsTag(q)}
     <p class="question">${q.q}</p>
     ${body}
-    ${done?`<div class="explain ${good?"":"no"}" role="status"><b>${good?"✓ Bonne réponse":timeout?"⏱ Temps écoulé":"✗ Mauvaise réponse"}</b>${good?"":`${timeout?"":`<p class="ans">Ta réponse : ${it.as || q.o[quiz.picked]}</p>`}<p class="ans ok">Bonne réponse : ${q.o[0]}</p>`}${explainBody(q)}${!good && !timeout && fmt==="txt" && !quiz.sd ? `<p><button type="button" class="btn" id="qforce">J'avais juste (mal tapé)</button></p>` : ""}</div>
+    ${done?`<div class="explain ${good?"":"no"}" role="status"><b>${good?"✓ Bonne réponse":timeout?"⏱ Temps écoulé":"✗ Mauvaise réponse"}</b>${good?"":`${timeout?"":`<p class="ans">Ta réponse : ${it.as || q.o[quiz.picked]}</p>`}<p class="ans ok">${q.multi ? "Bonnes réponses : "+q.ok.map(i=>q.o[i]).join(" ; ") : "Bonne réponse : "+q.o[0]}</p>`}${explainBody(q)}${!good && !timeout && fmt==="txt" && !quiz.sd ? `<p><button type="button" class="btn" id="qforce">J'avais juste (mal tapé)</button></p>` : ""}</div>
     ${good && !q.gen?`<div class="conf"><span>Tu étais :</span><div class="chips" id="qconf"><button type="button" class="chip" data-c="sur" aria-pressed="${it.conf!=="hes"}">Sûr</button><button type="button" class="chip" data-c="hes" aria-pressed="${it.conf==="hes"}">Hésitant <kbd class="kbd-hint">H</kbd></button></div></div>`:""}
     <p class="srs muted">${srsNext(q, it)}</p>
     <div class="row"><button type="button" class="btn primary" id="qnext">${quiz.i+1<n?"Question suivante":"Voir le résultat"}</button><span class="muted kbd-hint" style="font-size:.85rem">Entrée ou Espace</span></div>`
-    :`<p class="muted kbd-hint" style="font-size:.85rem">${fmt==="vf" ? "Touche 1 = vrai, 2 = faux" : fmt==="txt" ? "Tape les chiffres puis Entrée" : "Touches 1 à 4 ou A à D pour répondre"}${q.gen?"":" · F favori"} · S signaler</p>`}
+    :`<p class="muted kbd-hint" style="font-size:.85rem">${fmt==="vf" ? "Touche 1 = vrai, 2 = faux" : fmt==="multi" ? "Touches 1 à 4 pour cocher, Entrée pour valider" : fmt==="txt" ? "Tape les chiffres puis Entrée" : "Touches 1 à 4 ou A à D pour répondre"}${q.gen?"":" · F favori"} · S signaler</p>`}
     <div class="qtools">
       ${q.gen ? "" : `<button type="button" class="btn" id="qfav" aria-pressed="${fav}" title="Mettre en favori (touche F)">${fav?"★ En favori":"☆ Favori"}</button>`}
       <button type="button" class="btn" id="qrep" ${quiz.repOpen?'aria-expanded="true"':""} title="Signaler une erreur ou un doute (touche S)">${reported?"⚑ Signalée":"⚑ Signaler"}</button>
@@ -1337,6 +1348,17 @@ function corrList(items, title){
 }
 /* Réponse donnée (tous formats). picked : indice choisi en QCM, 0 = juste, -1 = temps écoulé, -2 = faux en vrai/faux ou à compléter */
 function pick(oi){ settle(oi, oi===0, null); }
+function toggleMulti(oi){
+  if(!quiz||quiz.picked!==null||quiz.i>=quiz.items.length) return;
+  const it = quiz.items[quiz.i]; if(it.fmt!=="multi") return;
+  const s = it.sel || []; it.sel = s.includes(oi) ? s.filter(i=>i!==oi) : [...s, oi]; render();
+}
+function pickMulti(){
+  if(!quiz||quiz.picked!==null||quiz.i>=quiz.items.length) return;
+  const it = quiz.items[quiz.i], q = it.q, s = it.sel || []; if(it.fmt!=="multi" || !s.length) return;
+  const ok = s.length===q.ok.length && q.ok.every(i=>s.includes(i));
+  settle(ok ? 0 : -2, ok, s.slice().sort().map(i=>q.o[i]).join(" ; "));
+}
 function pickVf(v){
   if(!quiz||quiz.picked!==null||quiz.i>=quiz.items.length) return;
   const it = quiz.items[quiz.i], ok = (v===1) === (it.s===0); it.v = v;
@@ -1364,7 +1386,7 @@ function settle(picked, ok, as){
   const it = quiz.items[quiz.i], q = it.q; quiz.picked = picked; it.as = ok ? null : as;
   it.prev = S.qp[q.id] ? {...S.qp[q.id]} : null; it.conf = "sur";
   if(q.gen){ tick(); const m = S.mg[q.gen] || {n:0, c:0}; S.mg[q.gen] = {n:m.n+1, c:m.c+(ok?1:0)}; } else recordQ(q, ok);
-  (quiz.log=quiz.log||[]).push({q, a: picked===-1 ? null : ok ? 0 : picked, as: it.as});
+  (quiz.log=quiz.log||[]).push({q, a: picked===-1 ? null : ok ? 0 : picked, as: it.as, ...(q.multi ? {ok:q.ok} : {})});
   if(ok) quiz.score++; else quiz.wrong.push(q);
   if(quiz.sd){
     if(quiz.score > (S.sd[quiz.sd]||0)) S.sd[quiz.sd] = quiz.score;
@@ -1399,7 +1421,7 @@ function bindQcm(){
   const rk=$("#qrepk"); if(rk) rk.onclick=e=>{ const b=e.target.closest("[data-k]"); if(!b) return; quiz.repKind=b.dataset.k; rk.querySelectorAll("[data-k]").forEach(x=>x.setAttribute("aria-pressed", x===b)); };
   const rf=$("#qrepf"); if(rf) rf.onsubmit=e=>{
     e.preventDefault(); const q=quiz.items[quiz.i].q;
-    S.rep = [...S.rep.filter(r=>r.id!==q.id), {id:q.id, t:q.t, q:q.q.replace(/<[^>]+>/g,""), a:q.o[0], kind:quiz.repKind==="doute"?"doute":"err", note:$("#qrepn").value.trim(), at:Date.now()}];
+    S.rep = [...S.rep.filter(r=>r.id!==q.id), {id:q.id, t:q.t, q:q.q.replace(/<[^>]+>/g,""), a:q.multi ? q.ok.map(i=>q.o[i]).join(" ; ") : q.o[0], kind:quiz.repKind==="doute"?"doute":"err", note:$("#qrepn").value.trim(), at:Date.now()}];
     quiz.repOpen=false; save(); render();
   };
   const rc=$("#qrepc"); if(rc) rc.onclick=()=>{ quiz.repOpen=false; render(); };
@@ -1429,6 +1451,8 @@ function bindQcm(){
   document.querySelectorAll("[data-pdel]").forEach(b=>b.onclick=()=>{ S.presets.splice(+b.dataset.pdel,1); save(); render(); });
   document.querySelectorAll(".opt[data-oi]").forEach(b=>b.onclick=()=>pick(+b.dataset.oi));
   document.querySelectorAll(".opt[data-vf]").forEach(b=>b.onclick=()=>pickVf(+b.dataset.vf));
+  document.querySelectorAll(".opt[data-mi]").forEach(b=>b.onclick=()=>toggleMulti(+b.dataset.mi));
+  const mv=$("#qmv"); if(mv) mv.onclick=pickMulti;
   const tx=$("#qtxt"); if(tx && quiz && quiz.picked===null){
     tx.onsubmit=e=>{ e.preventDefault(); const hs=[...tx.querySelectorAll(".hole")], vals=hs.map(i=>i.value);
       const empty=hs.find(i=>!i.value.trim()); if(empty){ empty.focus(); return; } pickTxt(vals); };
@@ -1443,7 +1467,7 @@ function bindQcm(){
   document.querySelectorAll("[data-mgn]").forEach(b=>b.onclick=()=>{ startGen(+b.dataset.mgn); render(); window.scrollTo(0,0); });
   const qg=$("#qgen"); if(qg) qg.onclick=()=>{ startGen(quiz.items.length); render(); window.scrollTo(0,0); };
   const ag=$("#qagain"); if(ag) ag.onclick=()=>{ quiz=null; render(); };
-  const er=$("#qerr"); if(er) er.onclick=()=>{ const w=quiz.wrong; quiz={items:w.map(q0=>{ const q = view(q0.base||q0); return {q, sd:q.sd, order:shuffle(q.o.map((_,i)=>i))}; }),i:0,picked:null,score:0,wrong:[],t:quiz.t}; render(); };
+  const er=$("#qerr"); if(er) er.onclick=()=>{ const w=quiz.wrong; quiz={items:w.map(q0=>{ if(q0.multi) return mkItem(q0, "multi"); const q = view(q0.base||q0); return {q, sd:q.sd, order:shuffle(q.o.map((_,i)=>i))}; }),i:0,picked:null,score:0,wrong:[],t:quiz.t}; render(); };
   qtStart();
 }
 
@@ -1615,9 +1639,10 @@ const exPool = () => { const th = EX_FMT[exSetup.f].th; return visQ().filter(q =
 const fmtTime = ms => { const s = Math.max(0, Math.ceil(ms/1000)); return pad(Math.floor(s/60))+":"+pad(s%60); };
 const noteFr = n => String(n).replace(".", ",");
 function startExam(){
-  const pool = shuffle(exPool()).slice(0, exSetup.n);
-  const bar = !!exSetup.bar;
-  exam = {f:exSetup.f, bar, pen:exSetup.f==="math"?0:0.5, items:pool.map(q0=>{ const q = view(q0); return {q, sd:q.sd, order:shuffle(q.o.map((_,i)=>i)), a:bar?[]:null}; }), i:0, start:Date.now(), end:Date.now()+exSetup.min*60000, min:exSetup.min, done:false, confirm:false};
+  const bar = !!exSetup.bar, th = EX_FMT[exSetup.f].th;
+  const mp = bar ? shuffle(visM().filter(q => !th || th.includes(q.t))).slice(0, Math.round(exSetup.n/3)) : [];
+  const pool = shuffle([...shuffle(exPool()).slice(0, exSetup.n - mp.length), ...mp]);
+  exam = {f:exSetup.f, bar, pen:exSetup.f==="math"?0:0.5, items:pool.map(q0=>{ if(q0.multi) return {q:q0, order:shuffle(q0.o.map((_,i)=>i)), a:[], ok:q0.ok}; const q = view(q0); return {q, sd:q.sd, order:shuffle(q.o.map((_,i)=>i)), a:bar?[]:null}; }), i:0, start:Date.now(), end:Date.now()+exSetup.min*60000, min:exSetup.min, done:false, confirm:false};
   runExamTimer();
 }
 function runExamTimer(){
@@ -1723,7 +1748,7 @@ function vExamen(){
   if(!exam) return `
     <section style="display:grid;gap:8px"><span class="label">Examen blanc · ${LV[S.obj]}</span><h2>Examen blanc</h2>
     <p class="lead">Conditions d'épreuve : questions tirées au hasard, chrono, aucune correction avant de rendre la copie. Note sur 20, sans points négatifs, sauf en format concours. Tu peux revenir sur une question tant que tu n'as pas rendu.</p>
-    <p class="muted" style="font-size:.9rem">Au concours, chaque épreuve écrite dure 1 h et compte coefficient 1. Une note sous 5 / 20 à une épreuve écrite est éliminatoire. Une question peut y avoir une ou plusieurs bonnes réponses, et le barème (points retirés éventuels) est écrit sur le sujet. Les questions de la banque n'ont qu'une bonne réponse ; le format concours te fait cocher sans savoir combien il y en a, avec le barème des sujets 2023 : 1 point si tout est juste, 0 sans réponse, −0,5 si c'est faux ou incomplet (pas de pénalité en maths). (${CADRAGE})</p></section>
+    <p class="muted" style="font-size:.9rem">Au concours, chaque épreuve écrite dure 1 h et compte coefficient 1. Une note sous 5 / 20 à une épreuve écrite est éliminatoire. Une question peut y avoir une ou plusieurs bonnes réponses, et le barème (points retirés éventuels) est écrit sur le sujet. Les questions de la banque n'ont qu'une bonne réponse ; le format concours te fait cocher sans savoir combien il y en a et y ajoute environ un tiers de questions à plusieurs bonnes réponses, avec le barème des sujets 2023 : 1 point si tout est juste, 0 sans réponse, −0,5 si c'est faux ou incomplet (pas de pénalité en maths). (${CADRAGE})</p></section>
     <div class="panel">
       <span class="label">Format</span>
       <div class="chips" id="exf">${Object.entries(EX_FMT).map(([k,v])=>`<button type="button" class="chip" data-f="${k}" aria-pressed="${exSetup.f===k}">${v.n}</button>`).join("")}</div>
@@ -1802,12 +1827,12 @@ function render(){
 }
 /* Sessions en cours gardées sur l'appareil (départ en intervention, appli fermée…) puis retrouvées à la réouverture.
    L'examen blanc garde son temps restant : le chrono est en pause tant que l'appli est fermée. */
-const QBY = new Map(ALLQ.map(q=>[q.id,q]));
+const QBY = new Map([...ALLQ, ...MULTI].map(q=>[q.id,q]));
 ROUTES.mesq = "Mes questions"; VIEWS.mesq = [vMesq, bindMesq]; VIEWS.oral = [vOral, bindOral]; VIEWS.sport = [vSport, bindSport];
 injectMine();
 function saveRun(){
   const r = {};
-  if(quizRunning()) r.quiz = {items:quiz.items.map(it=>[it.q.id,it.order,it.fmt||"qcm",it.s??null,it.v??null,it.vals||null,it.as||null,it.sd??null]), i:quiz.i, picked:quiz.picked, score:quiz.score, wrong:quiz.wrong.map(q=>q.id), log:(quiz.log||[]).map(x=>[x.q.id,x.a,x.as||null]), t:quiz.t||0, sd:quiz.sd||"", rec0:quiz.rec0||0};
+  if(quizRunning()) r.quiz = {items:quiz.items.map(it=>[it.q.id,it.order,it.fmt||"qcm",it.s??null,it.v??null,it.vals||it.sel||null,it.as||null,it.sd??null]), i:quiz.i, picked:quiz.picked, score:quiz.score, wrong:quiz.wrong.map(q=>q.id), log:(quiz.log||[]).map(x=>[x.q.id,x.a,x.as||null]), t:quiz.t||0, sd:quiz.sd||"", rec0:quiz.rec0||0};
   if(deck && deck.i < deck.items.length) r.deck = {ids:deck.items.map(c=>c.id), k:deck.items.map(c=>[c.kind,c.s??null,c.sd]), i:deck.i, flip:deck.flip, known:deck.known, vf:deck.vf??null, fmt:cardFmt};
   if(casRun && casRun.i < casRun.c.steps.length) r.cas = {id:casRun.c.id, i:casRun.i, picked:casRun.picked, score:casRun.score, order:casRun.order};
   if(exam && !exam.done) r.exam = {items:exam.items.map(it=>[it.q.id,it.order,it.a,it.sd??null]), i:exam.i, left:exam.end-Date.now(), min:exam.min, f:exam.f||"libre", bar:exam.bar?1:0, pen:exam.pen||0, ann:exam.ann||null};
@@ -1817,17 +1842,17 @@ function restoreRun(){
   const r = LS.get("run", {}) || {};
   try{
     if(r.quiz){
-      const items = r.quiz.items.map(([id,order,fmt,s,v,vals,as,sd])=>({q:sd==null?QBY.get(id):view(QBY.get(id),sd), sd:sd??undefined, order, fmt:fmt||"qcm", s:s??undefined, v:v??undefined, vals:vals||undefined, as:as||null}));
+      const items = r.quiz.items.map(([id,order,fmt,s,v,vals,as,sd])=>({q:sd==null?QBY.get(id):view(QBY.get(id),sd), sd:sd??undefined, order, fmt:fmt||"qcm", s:s??undefined, v:v??undefined, vals:fmt==="multi"?undefined:vals||undefined, sel:fmt==="multi"?vals||[]:undefined, as:as||null}));
       const shown = id => (items.find(it=>it.q&&it.q.id===id)||{}).q || QBY.get(id); // la formulation vue pendant le quiz
       if(items.every(it=>it.q) && r.quiz.i < items.length) quiz = {items, i:r.quiz.i, picked:r.quiz.picked, score:r.quiz.score,
-        wrong:r.quiz.wrong.map(shown).filter(Boolean), log:r.quiz.log.map(([id,a,as])=>({q:shown(id), a, as})).filter(x=>x.q), t:r.quiz.t||0, sd:r.quiz.sd||undefined, rec0:r.quiz.rec0||0};
+        wrong:r.quiz.wrong.map(shown).filter(Boolean), log:r.quiz.log.map(([id,a,as])=>{ const q = shown(id); return {q, a, as, ...(q && q.multi ? {ok:q.ok} : {})}; }).filter(x=>x.q), t:r.quiz.t||0, sd:r.quiz.sd||undefined, rec0:r.quiz.rec0||0};
     }
     if(r.deck && r.deck.k){ const qs = r.deck.ids.map(id=>QBY.get(String(id).slice(2))); if(qs.every(Boolean)){ deck = {items:qs.map((q,x)=>{ const [k,s0,sd]=r.deck.k[x]; return cardItem(cardOf(q),k,s0??undefined,sd); }), i:r.deck.i, flip:r.deck.flip, known:r.deck.known, vf:r.deck.vf}; cardFmt = r.deck.fmt||cardFmt; } }
     if(r.cas){ const c = CAS.find(x=>x.id===r.cas.id); if(c) casRun = {c, i:r.cas.i, picked:r.cas.picked, score:r.cas.score, order:r.cas.order}; }
     if(r.exam){
       const A = r.exam.ann ? annOf(r.exam.ann) : null;
       const items = A ? A.qs.map((x,k)=>({...annItem(A,x), a:(r.exam.items[k]||[])[2]||[]}))
-        : r.exam.items.map(([id,order,a,sd])=>({q:sd==null?QBY.get(id):view(QBY.get(id),sd), sd:sd??undefined, order, a}));
+        : r.exam.items.map(([id,order,a,sd])=>({q:sd==null?QBY.get(id):view(QBY.get(id),sd), sd:sd??undefined, order, a})).map(it => it.q && it.q.multi ? {...it, ok:it.q.ok} : it);
       if(items.length && items.every(it=>it.q) && (!r.exam.ann || A)){
         const left = Math.max(1000, r.exam.left), now = Date.now();
         exam = {f:r.exam.f||"libre", bar:!!r.exam.bar, pen:r.exam.pen||0, ann:r.exam.ann||undefined, items, i:r.exam.i, min:r.exam.min, end:now+left, start:now+left-r.exam.min*60000, done:false, confirm:false};
@@ -1846,7 +1871,8 @@ document.addEventListener("keydown", e => {
   if(r==="qcm" && quiz && !quiz.empty && quiz.i<quiz.items.length){
     const it=quiz.items[quiz.i], key=e.key.toLowerCase();
     if(e.key==="Escape" && quiz.repOpen){ quiz.repOpen=false; render(); }
-    else if(kx>=0 && quiz.picked===null){ const f=it.fmt||"qcm"; if(f==="vf"){ if(kx<2){ e.preventDefault(); pickVf(kx===0?1:0); } } else if(f==="qcm" && kx<it.order.length){ e.preventDefault(); pick(it.order[kx]); } }
+    else if(kx>=0 && quiz.picked===null){ const f=it.fmt||"qcm"; if(f==="vf"){ if(kx<2){ e.preventDefault(); pickVf(kx===0?1:0); } } else if(f==="multi" && kx<it.order.length){ e.preventDefault(); toggleMulti(it.order[kx]); } else if(f==="qcm" && kx<it.order.length){ e.preventDefault(); pick(it.order[kx]); } }
+    else if(e.key==="Enter" && quiz.picked===null && it.fmt==="multi"){ e.preventDefault(); pickMulti(); }
     else if((e.key==="Enter" || e.key===" ") && quiz.picked!==null){ e.preventDefault(); next(); }
     else if(key==="f"){ e.preventDefault(); toggleFav(); }
     else if(key==="s"){ e.preventDefault(); openRep(); }
