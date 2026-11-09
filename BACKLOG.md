@@ -53,7 +53,7 @@ Légende : ☐ à faire · ◐ en cours · ☑ fait · 🎨 choix visuel à vali
 - ☑ **C2. Sport** : page Sport (carnet, notes natation / parcours / Luc Léger, note physique, records, barèmes H/F). Source : arrêté du 30 novembre 2020. Oral : mode « entretien officiel » 15 min (5 + 10).
 - ☑ **C3. Vrai/faux et textes à trous** : choix « Format des questions » dans le QCM (QCM, vrai/faux, à compléter, mélange). Le texte à trous ne porte que sur les réponses chiffrées ; bouton « J'avais juste (mal tapé) ».
 - ⏸ **C4. Fiches plus riches** (en attente du retour de l'utilisateur) : schémas, tableaux, lien « questions associées ». Les fiches et cartes ne sont pas encore testées par l'utilisateur : ne pas les refondre avant son retour.
-- ☑ **C5. Suite des lots de questions** : lot 9 (2026-11-07) : SUAP 104, FDF 110, SR 117, 639 au total. À poursuivre : com, cult, fr, math, et OCR du GTO périlleux/montagne.
+- ☑ **C5. Suite des lots de questions** : lot 9 (2026-11-07) : SUAP 104, FDF 110, SR 117. Lot 10 (2026-11-09, 71200b6) : math 54, fr 40 (compréhension, vocabulaire). Lot 11 (2026-11-09) : com 69, cult 33, tirés du GDO commandement 2020. 750 au total. À poursuivre : cult (pas de source dans cours/culture-admin), étude de texte, OCR du GTO périlleux/montagne.
 - ☑ **C6. Formulaire d'ajout de question dans le site** : page #mesq « Mes questions » (ajout, modification, suppression, synchro avec le compte, mode QCM « Mes questions »).
 
 ## Phase T — Technique (en parallèle)
