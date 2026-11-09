@@ -33,6 +33,8 @@ const S = {
   mine: LS.get("mine",{}), // mes questions : id -> {t, q, o, e, src, at, del?}
   mineT: LS.get("mineT","suap"), // dernier thème choisi pour une nouvelle question
   srcOff: LS.get("srcOff",{off:[], at:0}), // référentiels décochés dans les Réglages (exclus partout), at = date du dernier changement
+  mg: LS.get("mg",{}),    // maths illimitées : catégorie -> {n, c}
+  mgSel: LS.get("mgSel",[]), // catégories cochées (vide = toutes)
   wk: LS.get("wk",null),  // semaine à thème : {mon, focus:[thèmes], final, hist, snap:{s,m}, prev:{bilan de la semaine passée}, seen, at}
   plan: LS.get("plan",{}), // rattrapage : "AAAA-MM-JJ" -> {t: réponses prévues ce jour-là, c: dont rattrapage}
   rep: LS.get("rep",[])   // signalements (gardés sur l'appareil seulement) : [{id, t, q, kind, note, at}]
@@ -42,7 +44,7 @@ const isFav = id => (S.fav[id]||0) > 0;
 const OLD_TH = ["suap","inc","div","sr","fdf","cult","com"];
 const withNewThemes = (themes, known) => [...themes, ...Object.keys(TH).filter(t => !known.includes(t) && !themes.includes(t))];
 S.themes = withNewThemes(S.themes, LS.get("thk", OLD_TH)); LS.set("thk", Object.keys(TH));
-const KEYS = ["obj","themes","qp","fp","cp","fs","days","goal","ex","qcm","presets","last","concours","fav","sd","rep","lb","mine","mineT","oral","oralT","sport","sportSex","srcOff","wk","plan"];
+const KEYS = ["obj","themes","qp","fp","cp","fs","days","goal","ex","qcm","presets","last","concours","fav","sd","rep","lb","mine","mineT","oral","oralT","sport","sportSex","srcOff","wk","plan","mg","mgSel"];
 const save = () => { KEYS.forEach(k => LS.set(k, S[k])); if (window.onLocalSave) window.onLocalSave(); motivCheck(); renderStreak(); };
 
 /* ---------- Répétition espacée et activité du jour ----------
@@ -1167,6 +1169,24 @@ function startQuiz(themes, n, mode, off, t, fmt){
   quiz = pool.length ? {items:pool.map(q=>mkItem(q, fmt)), i:0, picked:null, score:0, wrong:[], t:t||0} : {empty:true};
   if(mode==="sd" && !quiz.empty){ quiz.sd = sdKey(themes); quiz.rec0 = S.sd[quiz.sd]||0; }
 }
+/* Maths illimitées (js/gen.js) : énoncés tirés au hasard, résultats calculés ; comptent dans l'activité du jour, pas dans la révision espacée. */
+const mgCats = () => S.mgSel.filter(c => MGEN.cats[c]).length ? S.mgSel.filter(c => MGEN.cats[c]) : Object.keys(MGEN.cats);
+function startGen(n, fmt){
+  const cats = mgCats(), items = [];
+  for(let i = 0; i < n; i++){ const q = MGEN.make(cats[Math.floor(Math.random()*cats.length)]); if(q) items.push(mkItem(q, fmt || qcmSetup.fmt || "mix")); }
+  quiz = items.length ? {items, i:0, picked:null, score:0, wrong:[], t:qcmSetup.t||0, gen:true} : {empty:true};
+}
+function genPanel(){
+  if(typeof MGEN !== "object") return "";
+  const sel = mgCats(), all = sel.length === Object.keys(MGEN.cats).length;
+  return `<div class="panel" id="mgen">
+    <span class="label">${badge("math")} Maths illimitées</span>
+    <p class="muted" style="font-size:.9rem">Des calculs nouveaux à chaque fois : nombres tirés au hasard, résultats calculés par l'appli. Pour t'entraîner autant que tu veux, sans retomber sur les mêmes questions.</p>
+    <div class="chips" id="mgc">${Object.entries(MGEN.cats).map(([k,v]) => { const m = S.mg[k]; return `<button type="button" class="chip" data-mg="${k}" aria-pressed="${!all && sel.includes(k)}">${v}${m && m.n ? ` · ${pct(m.c, m.n)} %` : ""}</button>`; }).join("")}</div>
+    <p class="muted" style="font-size:.85rem">${all ? "Toutes les catégories (touche une catégorie pour ne travailler qu'elle)." : `${sel.length} catégorie${sel.length>1?"s":""} choisie${sel.length>1?"s":""}.`} Le pourcentage indique tes bonnes réponses. Format et chrono : ceux choisis plus haut.</p>
+    <div class="row"><button type="button" class="btn primary" data-mgn="10">10 calculs</button><button type="button" class="btn" data-mgn="20">20 calculs</button></div>
+  </div>`;
+}
 /* Record de mort subite : par thème quand un seul thème est choisi, sinon par groupe de thèmes */
 const sdKey = th => [...th].sort().join("+");
 const sdName = k => { const th = k.split("+").filter(t=>TH[t]); return th.length===1 ? TH[th[0]].n : th.length===themesForLevel().length ? "Tous thèmes" : th.map(t=>TH[t].k).join(" + "); };
@@ -1214,7 +1234,8 @@ function vQcm(){
       ${qcmSetup.pform?`<form class="row" id="pform"><input class="field" id="pname" maxlength="40" value="${esc(cfgName(curCfg()))}" aria-label="Nom du favori" style="max-width:320px"><button class="btn primary">Enregistrer</button><button type="button" class="btn" id="pcancel">Annuler</button></form>`:""}
       ${S.presets.length?`<span class="label">Mes favoris — un toucher pour lancer</span><div class="presets">${S.presets.map((f,i)=>`<span class="preset"><button type="button" class="chip" data-p="${i}" title="${esc(cfgName(f))}">★ ${esc(f.name)}</button><button type="button" class="pdel" data-pdel="${i}" aria-label="Supprimer le favori ${esc(f.name)}">×</button></span>`).join("")}</div>`:""}
       <p class="muted" style="font-size:.85rem">Tes réglages sont gardés en mémoire pour la prochaine fois.</p>
-    </div>`;
+    </div>
+    ${genPanel()}`;
   if(quiz.empty) return `<div class="empty">Aucune question ne correspond à ce choix.${qcmSetup.mode==="fav"?"<br>Ajoute des questions en favori avec l'étoile ☆ pendant un quiz.":""}<br><br><button type="button" class="btn" id="qback">Changer les réglages</button></div>`;
   if(quiz.i >= quiz.items.length){
     const n = quiz.items.length, pct = Math.round(100*quiz.score/n);
@@ -1232,7 +1253,7 @@ function vQcm(){
       <span class="label">Résultat</span>
       <div class="score num">${quiz.score}<span style="font-size:1.6rem"> / ${n}</span></div>
       <p class="lead">${pct>=80?"Solide. Passe à un autre thème ou augmente le nombre de questions.":pct>=50?"Bonne base. Reprends tes erreurs pour consolider.":"Ces notions sont à retravailler : relis la fiche du thème puis refais le quiz."}</p>
-      <div class="row"><button type="button" class="btn primary" id="qagain">Nouveau quiz</button>${quiz.wrong.length?`<button type="button" class="btn" id="qerr">Refaire mes erreurs</button>`:""}</div>
+      <div class="row">${quiz.gen?`<button type="button" class="btn primary" id="qgen">Encore ${n} calculs</button>`:""}<button type="button" class="btn ${quiz.gen?"":"primary"}" id="qagain">Nouveau quiz</button>${quiz.wrong.length?`<button type="button" class="btn" id="qerr">Refaire mes erreurs</button>`:""}</div>
     </section>
     ${quiz.log&&quiz.log.length?corrList(quiz.log,"Correction détaillée"):""}`;
   }
@@ -1256,19 +1277,19 @@ function vQcm(){
   const reported = S.rep.some(r=>r.id===q.id);
   const count = quiz.sd ? `série ${quiz.score} · record ${Math.max(quiz.rec0, quiz.score)}` : `${quiz.i+1} / ${n} · ${quiz.score} juste${quiz.score>1?"s":""}`;
   return `<section style="display:grid;gap:14px">
-    <div class="qhead"><span class="label">${badge(q.t)} ${TH[q.t].n}${quiz.sd?" · mort subite":""}</span><span class="num muted">${count}</span></div>
+    <div class="qhead"><span class="label">${badge(q.t)} ${q.gen ? "Maths illimitées · "+MGEN.cats[q.gen] : TH[q.t].n}${quiz.sd?" · mort subite":""}</span><span class="num muted">${count}</span></div>
     ${quiz.sd?"":`<div class="progress"><i style="width:${100*(quiz.i+(done?1:0))/n}%"></i></div>`}
     ${quiz.t && !done ? `<div class="qtime"><div class="qtimer"><i id="qtbar" style="width:${100*(quiz.qLeft==null?1:quiz.qLeft/(quiz.t*1000))}%"></i></div><span class="num" id="qtsec">${Math.ceil((quiz.qLeft==null?quiz.t*1000:quiz.qLeft)/1000)} s</span></div>` : ""}
-    ${done ? "" : srsTag(q)}
+    ${done || q.gen ? "" : srsTag(q)}
     <p class="question">${q.q}</p>
     ${body}
     ${done?`<div class="explain ${good?"":"no"}" role="status"><b>${good?"✓ Bonne réponse":timeout?"⏱ Temps écoulé":"✗ Mauvaise réponse"}</b>${good?"":`${timeout?"":`<p class="ans">Ta réponse : ${it.as || q.o[quiz.picked]}</p>`}<p class="ans ok">Bonne réponse : ${q.o[0]}</p>`}${explainBody(q)}${!good && !timeout && fmt==="txt" && !quiz.sd ? `<p><button type="button" class="btn" id="qforce">J'avais juste (mal tapé)</button></p>` : ""}</div>
-    ${good?`<div class="conf"><span>Tu étais :</span><div class="chips" id="qconf"><button type="button" class="chip" data-c="sur" aria-pressed="${it.conf!=="hes"}">Sûr</button><button type="button" class="chip" data-c="hes" aria-pressed="${it.conf==="hes"}">Hésitant <kbd class="kbd-hint">H</kbd></button></div></div>`:""}
+    ${good && !q.gen?`<div class="conf"><span>Tu étais :</span><div class="chips" id="qconf"><button type="button" class="chip" data-c="sur" aria-pressed="${it.conf!=="hes"}">Sûr</button><button type="button" class="chip" data-c="hes" aria-pressed="${it.conf==="hes"}">Hésitant <kbd class="kbd-hint">H</kbd></button></div></div>`:""}
     <p class="srs muted">${srsNext(q, it)}</p>
     <div class="row"><button type="button" class="btn primary" id="qnext">${quiz.i+1<n?"Question suivante":"Voir le résultat"}</button><span class="muted kbd-hint" style="font-size:.85rem">Entrée ou Espace</span></div>`
-    :`<p class="muted kbd-hint" style="font-size:.85rem">${fmt==="vf" ? "Touche 1 = vrai, 2 = faux" : fmt==="txt" ? "Tape les chiffres puis Entrée" : "Touches 1 à 4 ou A à D pour répondre"} · F favori · S signaler</p>`}
+    :`<p class="muted kbd-hint" style="font-size:.85rem">${fmt==="vf" ? "Touche 1 = vrai, 2 = faux" : fmt==="txt" ? "Tape les chiffres puis Entrée" : "Touches 1 à 4 ou A à D pour répondre"}${q.gen?"":" · F favori"} · S signaler</p>`}
     <div class="qtools">
-      <button type="button" class="btn" id="qfav" aria-pressed="${fav}" title="Mettre en favori (touche F)">${fav?"★ En favori":"☆ Favori"}</button>
+      ${q.gen ? "" : `<button type="button" class="btn" id="qfav" aria-pressed="${fav}" title="Mettre en favori (touche F)">${fav?"★ En favori":"☆ Favori"}</button>`}
       <button type="button" class="btn" id="qrep" ${quiz.repOpen?'aria-expanded="true"':""} title="Signaler une erreur ou un doute (touche S)">${reported?"⚑ Signalée":"⚑ Signaler"}</button>
       <button type="button" class="btn" id="qstop">Arrêter le quiz</button>
     </div>
@@ -1339,7 +1360,8 @@ function settle(picked, ok, as){
   quiz.qEnd = null; quiz.qLeft = null;
   const it = quiz.items[quiz.i], q = it.q; quiz.picked = picked; it.as = ok ? null : as;
   it.prev = S.qp[q.id] ? {...S.qp[q.id]} : null; it.conf = "sur";
-  recordQ(q, ok); (quiz.log=quiz.log||[]).push({q, a: picked===-1 ? null : ok ? 0 : picked, as: it.as});
+  if(q.gen){ tick(); const m = S.mg[q.gen] || {n:0, c:0}; S.mg[q.gen] = {n:m.n+1, c:m.c+(ok?1:0)}; } else recordQ(q, ok);
+  (quiz.log=quiz.log||[]).push({q, a: picked===-1 ? null : ok ? 0 : picked, as: it.as});
   if(ok) quiz.score++; else quiz.wrong.push(q);
   if(quiz.sd){
     if(quiz.score > (S.sd[quiz.sd]||0)) S.sd[quiz.sd] = quiz.score;
@@ -1356,7 +1378,7 @@ function setConf(c){
   save(); render();
 }
 function toggleFav(){
-  if(!quiz || quiz.empty || quiz.i>=quiz.items.length) return;
+  if(!quiz || quiz.empty || quiz.i>=quiz.items.length || quiz.items[quiz.i].q.gen) return;
   const id = quiz.items[quiz.i].q.id;
   S.fav[id] = isFav(id) ? -Date.now() : Date.now(); save(); render();
 }
@@ -1413,6 +1435,10 @@ function bindQcm(){
   const nx=$("#qnext"); if(nx){ nx.onclick=next; nx.focus({preventScroll:true}); }
   const st=$("#qstop"); if(st) st.onclick=()=>{ quiz=null; render(); };
   const bk=$("#qback"); if(bk) bk.onclick=()=>{ quiz=null; render(); };
+  const mc=$("#mgc"); if(mc) mc.onclick=e=>{ const b=e.target.closest("[data-mg]"); if(!b) return; const k=b.dataset.mg, cur=S.mgSel.filter(c=>MGEN.cats[c]);
+    S.mgSel = cur.includes(k) ? cur.filter(c=>c!==k) : [...cur, k]; if(S.mgSel.length===Object.keys(MGEN.cats).length) S.mgSel=[]; save(); render(); };
+  document.querySelectorAll("[data-mgn]").forEach(b=>b.onclick=()=>{ startGen(+b.dataset.mgn); render(); window.scrollTo(0,0); });
+  const qg=$("#qgen"); if(qg) qg.onclick=()=>{ startGen(quiz.items.length); render(); window.scrollTo(0,0); };
   const ag=$("#qagain"); if(ag) ag.onclick=()=>{ quiz=null; render(); };
   const er=$("#qerr"); if(er) er.onclick=()=>{ const w=quiz.wrong; quiz={items:w.map(q0=>{ const q = view(q0.base||q0); return {q, sd:q.sd, order:shuffle(q.o.map((_,i)=>i))}; }),i:0,picked:null,score:0,wrong:[],t:quiz.t}; render(); };
   qtStart();

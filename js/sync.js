@@ -50,11 +50,14 @@ function mergeData(remote){
     else if(remote.wk.mon === l.mon && remote.wk.seen) l.seen = true; }
   // Rattrapage : un jour déjà planifié sur un appareil garde ce plan.
   if(remote.plan && typeof remote.plan === "object") for(const [d,v] of Object.entries(remote.plan)) if(v && typeof v.t === "number" && !S.plan[d]) S.plan[d] = v;
+  // Maths illimitées : pour chaque catégorie, le compteur le plus avancé.
+  if(remote.mg && typeof remote.mg === "object") for(const [k,v] of Object.entries(remote.mg)) if(v && (v.n||0) > ((S.mg[k]||{}).n||0)) S.mg[k] = v;
+  if(Array.isArray(remote.mgSel)) S.mgSel = remote.mgSel;
   if(remote.sportSex==="H" || remote.sportSex==="F") S.sportSex = remote.sportSex;
   if(typeof remote.lb === "number" && Math.abs(remote.lb) > Math.abs(S.lb||0)) S.lb = remote.lb;
   if(Array.isArray(remote.presets)){ const names = new Set(S.presets.map(p=>p.name)); S.presets = [...S.presets, ...remote.presets.filter(p=>p && !names.has(p.name))].slice(-8); }
 }
-const payload = () => ({obj:S.obj, themes:S.themes, qp:S.qp, fp:S.fp, cp:S.cp, fs:S.fs, days:S.days, goal:S.goal, ex:S.ex, thk:Object.keys(TH), concours:S.concours, qcm:S.qcm, last:S.last, presets:S.presets, fav:S.fav, sd:S.sd, lb:S.lb, mine:S.mine, oral:S.oral, oralT:S.oralT, sport:S.sport, sportSex:S.sportSex, srcOff:S.srcOff, wk:S.wk, plan:S.plan});
+const payload = () => ({obj:S.obj, themes:S.themes, qp:S.qp, fp:S.fp, cp:S.cp, fs:S.fs, days:S.days, goal:S.goal, ex:S.ex, thk:Object.keys(TH), concours:S.concours, qcm:S.qcm, last:S.last, presets:S.presets, fav:S.fav, sd:S.sd, lb:S.lb, mine:S.mine, oral:S.oral, oralT:S.oralT, sport:S.sport, sportSex:S.sportSex, srcOff:S.srcOff, wk:S.wk, plan:S.plan, mg:S.mg, mgSel:S.mgSel});
 
 let pushTimer = null, applying = false;
 async function push(){

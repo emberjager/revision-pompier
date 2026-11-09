@@ -65,7 +65,7 @@ Réponses de l'utilisateur : garder les deux voies (externe classique = QCM math
 - ☑ **R3. Bilan de la semaine** : chaque lundi, ce qui a été fait, les progrès, les 5 points faibles, le programme de la semaine.
 - ☐ **R4. Plusieurs bonnes réponses** : questions où il faut cocher toutes les bonnes réponses (QCM « actif/passif » des notes de cadrage). Barème à lire dans les notes de cadrage, ne pas l'inventer.
 - ☐ **R5. Annales officielles** : sujets 2023 du SDIS 35 (externe et externe ouvert aux SPV, PDF dans cours/annales, non publiés) puis annales 2021 et notes de cadrage 2025 d'agirhe-concours.fr (à télécharger par l'utilisateur, le site bloque les robots). Mode « sujet officiel » : chrono 1 h, correction, note.
-- ☐ **R6. Maths illimitées** : exercices générés avec des chiffres différents à chaque fois (débits, autonomie, conversions, vitesses, pourcentages, aires/volumes), réponse calculée par le code.
+- ☑ **R6. Maths illimitées** : exercices générés avec des chiffres différents à chaque fois (débits, autonomie, conversions, vitesses, pourcentages, aires/volumes), réponse calculée par le code.
 - ☐ **R7. Étude de texte** : QCM sur un texte. Annales (questions + lien PDF) ; textes d'entraînement possibles sous Licence Ouverte (rapports et sites publics) à proposer à l'utilisateur.
 - ☐ **R8. Fiches synthèse par GTO/GDO** : une page par référentiel avec les chiffres clés, tirée des PDF de cours/ (toujours sourcée). Ne pas toucher aux fiches existantes (C4 en attente).
 
