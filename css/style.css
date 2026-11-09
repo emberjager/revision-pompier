@@ -105,6 +105,11 @@ main{padding-block:24px 40px;display:grid;gap:22px}
 .flash.on .flash-in{transform:rotateY(180deg)}
 .face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:22px;display:flex;flex-direction:column;justify-content:center;gap:10px;overflow:auto}
 .face.back{transform:rotateY(180deg);border-color:var(--red)}
+.flash.qcard,.flash.qcard .flash-in{min-height:0}
+.flash.qcard .flash-in{display:grid}
+.flash.qcard .face{position:relative;inset:auto;grid-area:1/1;justify-content:flex-start;min-height:230px}
+.face .qtxt{margin:0;font-size:1.2rem;font-weight:600;line-height:1.4}
+.face p{margin:0}
 .face .big{font-family:var(--display);font-size:1.7rem;font-weight:700;line-height:1.15}
 .face .ans{font-size:1.15rem;line-height:1.45}
 @media (prefers-reduced-motion:reduce){.flash-in,.progress i{transition:none}}

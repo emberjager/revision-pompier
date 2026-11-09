@@ -2,7 +2,8 @@
 const hash = s => { let h=0; for (const c of s) h=(h*31 + c.charCodeAt(0))|0; return (h>>>0).toString(36); };
 const QV = typeof QVAR === "object" && QVAR || {}; // variantes de formulation (js/var.js), rangées par identifiant
 const ALLQ = Object.entries(QDATA).flatMap(([t,arr]) => arr.map(x => { const id = t+"-"+hash(x.q); return {...x, ...(QV[id]||{}), t, id}; }));
-const ALLF = Object.entries(FDATA).flatMap(([t,arr]) => arr.map(([f,b,opt]) => ({f,b,t,l:opt&&opt.l,id:t+"-"+hash(f)})));
+/* Cartes mémoire : une carte par question de la banque (les anciennes cartes mot-clé de FDATA ne sont plus affichées). */
+const cardOf = q => ({id:"c:"+q.id, t:q.t, l:q.l, q});
 
 /* ---------- Stockage local ---------- */
 const LS = {
@@ -80,7 +81,7 @@ const lvOk = x => S.obj==="tous" || !x.l || x.l.split(" ").includes(S.obj);
 const lvQ = () => ALLQ.filter(lvOk);
 /* Référentiels décochés dans les Réglages : leurs questions disparaissent de partout (si tout est décoché, on garde tout). */
 const visQ = () => { const off = S.srcOff.off, l = lvQ(); if(!off.length) return l; const r = l.filter(q => q.mine || !off.includes(srcOf(q))); return r.length ? r : l; };
-const visF = () => ALLF.filter(lvOk);
+const visF = () => visQ().map(cardOf);
 const themesForLevel = () => Object.keys(TH).filter(t => visQ().some(q=>q.t===t));
 const activeThemes = () => { const avail = themesForLevel(); const sel = S.themes.filter(t=>avail.includes(t)); return sel.length?sel:avail; };
 const shuffle = (a, rnd=Math.random) => { a=[...a]; for(let i=a.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; };
@@ -1447,34 +1448,61 @@ function bindQcm(){
 }
 
 /* ---------- Cartes ---------- */
+/* Les cartes sont tirées de la banque de questions : une question à laquelle on répond de tête,
+   ou une proposition à juger vrai/faux. Id de carte = "c:" + id de la question. */
 let deck = null;
-let cardMode = "todo";
+let cardMode = "todo", cardFmt = "mix";
+const CARD_NEW = 20; // nouvelles cartes au plus par paquet « À revoir »
+function cardItem(c, kind, s, sd){
+  if(!kind) kind = cardFmt==="vf" ? "vf" : cardFmt==="q" ? "q" : (canVf(c.q) && Math.random() < .5 ? "vf" : "q");
+  if(kind==="vf" && s==null) s = Math.random() < .5 ? 0 : 1 + Math.floor(Math.random()*(c.q.o.length-1));
+  if(sd==null) sd = Math.floor(Math.random()*2147483647);
+  return {...c, kind, s, sd};
+}
 function startDeck(){
   let pool = visF().filter(f=>activeThemes().includes(f.t));
-  if(cardMode==="todo") pool = pool.filter(f=>S.fs[f.id] ? isDue(S.fs[f.id]) : !S.fp[f.id]);
-  deck = {items:shuffle(pool), i:0, flip:false, known:0};
+  if(cardFmt==="vf") pool = pool.filter(c=>canVf(c.q));
+  if(cardMode==="todo"){
+    const due = pool.filter(f=>S.fs[f.id] && isDue(S.fs[f.id])), fresh = shuffle(pool.filter(f=>!S.fs[f.id])).slice(0, CARD_NEW);
+    pool = [...due, ...fresh];
+  }
+  deck = {items:shuffle(pool).map(c=>cardItem(c)), i:0, flip:false, known:0, vf:null};
 }
 function vCartes(){
   if(!deck) return `
-    <section style="display:grid;gap:8px"><span class="label">Cartes mémoire · ${LV[S.obj]}</span><h2>Cartes mémoire</h2><p class="lead">Lis la question, essaie de répondre de tête, retourne la carte puis indique si tu savais. Une carte que tu savais revient dans 1, 3, 7, 14 puis 30 jours ; une carte ratée revient le lendemain.</p></section>
+    <section style="display:grid;gap:8px"><span class="label">Cartes mémoire · ${LV[S.obj]}</span><h2>Cartes mémoire</h2><p class="lead">Chaque carte te pose une question ou te demande si une proposition est vraie. Réponds de tête, retourne la carte et lis l'explication. Une carte sue revient dans 1, 3, 7, 14 puis 30 jours ; une carte ratée revient le lendemain.</p></section>
     <div class="panel">
       <span class="label">Thèmes</span>${themeChips()}
       <span class="label">Paquet</span>
       <div class="chips" id="cm">${[["todo","À revoir aujourd'hui"],["all","Toutes les cartes"]].map(([k,v])=>`<button type="button" class="chip" data-m="${k}" aria-pressed="${cardMode===k}">${v}</button>`).join("")}</div>
+      <span class="label">Forme</span>
+      <div class="chips" id="cfm">${[["mix","Mélange"],["q","Questions"],["vf","Vrai ou faux"]].map(([k,v])=>`<button type="button" class="chip" data-cf="${k}" aria-pressed="${cardFmt===k}">${v}</button>`).join("")}</div>
+      <p class="muted" style="font-size:.9rem">« À revoir aujourd'hui » : les cartes prévues ce jour, plus ${CARD_NEW} nouvelles au plus.</p>
       <div><button type="button" class="btn primary" id="cgo">Commencer</button></div>
     </div>`;
   if(!deck.items.length) return `<div class="empty">Aucune carte à revoir aujourd'hui dans ces thèmes. Reviens demain, ou prends « Toutes les cartes ».<br><br><button type="button" class="btn" id="cback">Changer de paquet</button></div>`;
-  if(deck.i>=deck.items.length) return `<section class="panel"><span class="label">Paquet terminé</span><div class="score num">${deck.known}<span style="font-size:1.6rem"> / ${deck.items.length}</span></div><p class="lead">cartes connues sur ce passage.</p><div class="row"><button type="button" class="btn primary" id="cback">Nouveau paquet</button></div></section>`;
-  const c = deck.items[deck.i];
+  if(deck.i>=deck.items.length) return `<section class="panel"><span class="label">Paquet terminé</span><div class="score num">${deck.known}<span style="font-size:1.6rem"> / ${deck.items.length}</span></div><p class="lead">cartes sues sur ce passage.</p><div class="row"><button type="button" class="btn primary" id="cback">Nouveau paquet</button></div></section>`;
+  const c = deck.items[deck.i], q = view(c.q, c.sd), vf = c.kind==="vf";
+  const front = vf
+    ? `<span class="label">Vrai ou faux</span><p class="qtxt">${q.q}</p><div class="vfprop"><span class="label">Proposition</span><p>${q.o[c.s]}</p></div>${deck.flip?"":`<span class="muted" style="font-size:.85rem">Cette proposition est-elle la bonne réponse ?</span>`}`
+    : `<span class="label">Question</span><p class="qtxt">${q.q}</p><span class="muted" style="font-size:.85rem">Réponds de tête, puis touche la carte pour la retourner<span class="kbd-hint"> (ou Espace)</span></span>`;
+  const back = vf
+    ? `<span class="label">${deck.vf?"✓ Bien vu":"✗ Raté"}</span><p class="ans">La proposition « ${q.o[c.s]} » est <b>${c.s===0?"vraie":"fausse"}</b>.</p>${c.s===0?"":`<p class="ans ok">Bonne réponse : ${q.o[0]}</p>`}${explainBody(q)}`
+    : `<span class="label">Réponse</span><p class="ans ok">${q.o[0]}</p>${explainBody(q)}`;
+  let btns;
+  if(vf && !deck.flip) btns = `<button type="button" class="btn primary" data-cvf="1">Vrai <kbd>1</kbd></button><button type="button" class="btn" data-cvf="0">Faux <kbd class="muted">2</kbd></button>`;
+  else if(vf) btns = `<button type="button" class="btn primary" id="cnext">Carte suivante <kbd>Entrée</kbd></button>`;
+  else if(deck.flip) btns = `<button type="button" class="btn" id="cno">À revoir <kbd class="muted">1</kbd></button><button type="button" class="btn primary" id="cyes">Je savais <kbd>2</kbd></button>`;
+  else btns = `<button type="button" class="btn primary" id="cflip">Retourner</button>`;
   return `<section style="display:grid;gap:14px">
     <div class="qhead"><span class="label">${badge(c.t)} ${TH[c.t].n}</span><span class="num muted">${deck.i+1} / ${deck.items.length}</span></div>
-    <div class="flash ${deck.flip?"on":""}" id="flash" role="button" tabindex="0" aria-label="Retourner la carte">
+    <div class="flash qcard ${deck.flip?"on":""}" id="flash" ${vf?"":`role="button" tabindex="0" aria-label="Retourner la carte"`}>
       <div class="flash-in">
-        <div class="face"><span class="label">Question</span><div class="big">${c.f}</div><span class="muted" style="font-size:.85rem">Touche la carte pour la retourner<span class="kbd-hint"> (ou Espace)</span></span></div>
-        <div class="face back"><span class="label">Réponse</span><div class="ans">${c.b}</div></div>
+        <div class="face">${front}</div>
+        <div class="face back">${back}</div>
       </div>
     </div>
-    <div class="row">${deck.flip?`<button type="button" class="btn" id="cno">À revoir <kbd class="muted">1</kbd></button><button type="button" class="btn primary" id="cyes">Je savais <kbd>2</kbd></button>`:`<button type="button" class="btn primary" id="cflip">Retourner</button>`}<button type="button" class="btn" id="cstop">Arrêter</button></div>
+    <div class="row">${btns}<button type="button" class="btn" id="cstop">Arrêter</button></div>
   </section>`;
 }
 function cardAnswer(known){
@@ -1482,17 +1510,25 @@ function cardAnswer(known){
   const c=deck.items[deck.i];
   if(known){ S.fp[c.id]=true; deck.known++; } else delete S.fp[c.id];
   const p = S.fs[c.id]; S.fs[c.id] = {n:(p?p.n:0)+1, ...sched(p, known)}; tick();
-  save(); deck.i++; deck.flip=false; render();
+  save(); deck.i++; deck.flip=false; deck.vf=null; render();
 }
-function flip(){ if(deck&&deck.i<deck.items.length){ deck.flip=!deck.flip; render(); } }
+function cardVf(v){
+  if(!deck||deck.flip||deck.i>=deck.items.length) return;
+  const c=deck.items[deck.i]; if(c.kind!=="vf") return;
+  deck.vf = (v===1) === (c.s===0); deck.flip = true; render();
+}
+function flip(){ if(deck&&deck.i<deck.items.length&&deck.items[deck.i].kind!=="vf"){ deck.flip=!deck.flip; render(); } }
 function bindCartes(){
   bindChips(render);
   const cm=$("#cm"); if(cm) cm.onclick=e=>{const b=e.target.closest("[data-m]"); if(b){cardMode=b.dataset.m; render();}};
+  const cf2=$("#cfm"); if(cf2) cf2.onclick=e=>{const b=e.target.closest("[data-cf]"); if(b){cardFmt=b.dataset.cf; render();}};
   const go=$("#cgo"); if(go) go.onclick=()=>{ startDeck(); render(); };
   const fl=$("#flash"); if(fl) fl.onclick=flip;
   const cf=$("#cflip"); if(cf) cf.onclick=flip;
   const y=$("#cyes"); if(y) y.onclick=()=>cardAnswer(true);
   const n=$("#cno"); if(n) n.onclick=()=>cardAnswer(false);
+  document.querySelectorAll("[data-cvf]").forEach(b=>b.onclick=()=>cardVf(+b.dataset.cvf));
+  const nx=$("#cnext"); if(nx){ nx.onclick=()=>cardAnswer(deck.vf); nx.focus({preventScroll:true}); }
   ["#cstop","#cback"].forEach(s=>{ const b=$(s); if(b) b.onclick=()=>{ deck=null; render(); }; });
 }
 
@@ -1766,13 +1802,13 @@ function render(){
 }
 /* Sessions en cours gardées sur l'appareil (départ en intervention, appli fermée…) puis retrouvées à la réouverture.
    L'examen blanc garde son temps restant : le chrono est en pause tant que l'appli est fermée. */
-const QBY = new Map(ALLQ.map(q=>[q.id,q])), FBY = new Map(ALLF.map(f=>[f.id,f]));
+const QBY = new Map(ALLQ.map(q=>[q.id,q]));
 ROUTES.mesq = "Mes questions"; VIEWS.mesq = [vMesq, bindMesq]; VIEWS.oral = [vOral, bindOral]; VIEWS.sport = [vSport, bindSport];
 injectMine();
 function saveRun(){
   const r = {};
   if(quizRunning()) r.quiz = {items:quiz.items.map(it=>[it.q.id,it.order,it.fmt||"qcm",it.s??null,it.v??null,it.vals||null,it.as||null,it.sd??null]), i:quiz.i, picked:quiz.picked, score:quiz.score, wrong:quiz.wrong.map(q=>q.id), log:(quiz.log||[]).map(x=>[x.q.id,x.a,x.as||null]), t:quiz.t||0, sd:quiz.sd||"", rec0:quiz.rec0||0};
-  if(deck && deck.i < deck.items.length) r.deck = {ids:deck.items.map(c=>c.id), i:deck.i, flip:deck.flip, known:deck.known};
+  if(deck && deck.i < deck.items.length) r.deck = {ids:deck.items.map(c=>c.id), k:deck.items.map(c=>[c.kind,c.s??null,c.sd]), i:deck.i, flip:deck.flip, known:deck.known, vf:deck.vf??null, fmt:cardFmt};
   if(casRun && casRun.i < casRun.c.steps.length) r.cas = {id:casRun.c.id, i:casRun.i, picked:casRun.picked, score:casRun.score, order:casRun.order};
   if(exam && !exam.done) r.exam = {items:exam.items.map(it=>[it.q.id,it.order,it.a,it.sd??null]), i:exam.i, left:exam.end-Date.now(), min:exam.min, f:exam.f||"libre", bar:exam.bar?1:0, pen:exam.pen||0, ann:exam.ann||null};
   LS.set("run", r);
@@ -1786,7 +1822,7 @@ function restoreRun(){
       if(items.every(it=>it.q) && r.quiz.i < items.length) quiz = {items, i:r.quiz.i, picked:r.quiz.picked, score:r.quiz.score,
         wrong:r.quiz.wrong.map(shown).filter(Boolean), log:r.quiz.log.map(([id,a,as])=>({q:shown(id), a, as})).filter(x=>x.q), t:r.quiz.t||0, sd:r.quiz.sd||undefined, rec0:r.quiz.rec0||0};
     }
-    if(r.deck){ const items = r.deck.ids.map(id=>FBY.get(id)); if(items.every(Boolean)) deck = {items, i:r.deck.i, flip:r.deck.flip, known:r.deck.known}; }
+    if(r.deck && r.deck.k){ const qs = r.deck.ids.map(id=>QBY.get(String(id).slice(2))); if(qs.every(Boolean)){ deck = {items:qs.map((q,x)=>{ const [k,s0,sd]=r.deck.k[x]; return cardItem(cardOf(q),k,s0??undefined,sd); }), i:r.deck.i, flip:r.deck.flip, known:r.deck.known, vf:r.deck.vf}; cardFmt = r.deck.fmt||cardFmt; } }
     if(r.cas){ const c = CAS.find(x=>x.id===r.cas.id); if(c) casRun = {c, i:r.cas.i, picked:r.cas.picked, score:r.cas.score, order:r.cas.order}; }
     if(r.exam){
       const A = r.exam.ann ? annOf(r.exam.ann) : null;
@@ -1827,7 +1863,9 @@ document.addEventListener("keydown", e => {
     else if(e.key==="ArrowLeft"){ e.preventDefault(); exGo(exam.i-1); }
   }
   if(r==="cartes" && deck && deck.i<deck.items.length){
-    if(e.key===" "){ e.preventDefault(); flip(); }
+    const vfc = deck.items[deck.i].kind==="vf";
+    if(vfc){ if(!deck.flip && (e.key==="1"||e.key==="2")){ e.preventDefault(); cardVf(e.key==="1"?1:0); } else if(deck.flip && (e.key==="Enter"||e.key===" ")){ e.preventDefault(); cardAnswer(deck.vf); } }
+    else if(e.key===" "){ e.preventDefault(); flip(); }
     else if(deck.flip && e.key==="1") cardAnswer(false);
     else if(deck.flip && e.key==="2") cardAnswer(true);
   }
