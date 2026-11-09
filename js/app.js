@@ -1325,8 +1325,10 @@ function explainBody(q){
 }
 /* Correction détaillée : erreurs d'abord, bonnes réponses repliées */
 function corrList(items, title){
-  const bad = items.filter(it=>it.a!==0), good = items.filter(it=>it.a===0);
-  const li = it => `<li><p>${badge(it.q.t)} ${it.q.q}</p>${it.a===0?"":`<p class="yours">${it.a===null||it.a===undefined?"Sans réponse":"Ta réponse : "+(it.as||it.q.o[it.a])}</p>`}<p>${it.a===0?"✓ ":""}${it.q.o[0]}</p>${explainBody(it.q)}</li>`;
+  const isOk = it => it.good ?? it.a===0, none = it => it.a===null || it.a===undefined || (Array.isArray(it.a) && !it.a.length);
+  const opt = (it,i) => (it.ann ? "ABCDEF"[i]+". " : "")+it.q.o[i];
+  const bad = items.filter(it=>!isOk(it)), good = items.filter(isOk);
+  const li = it => `<li><p>${it.q.t?badge(it.q.t):""} ${it.q.q}</p>${isOk(it)?"":`<p class="yours">${none(it)?"Sans réponse":"Ta réponse : "+(it.as||(Array.isArray(it.a)?it.a.slice().sort().map(i=>opt(it,i)).join(" ; "):it.q.o[it.a]))}</p>`}<p>${isOk(it)?"✓ ":""}${(it.ok||[0]).map(i=>opt(it,i)).join(" ; ")}</p>${it.q.d?`<p class="muted" style="margin:0">⚠ Correction incertaine</p>`:""}${explainBody(it.q)}</li>`;
   return `<section style="display:grid;gap:10px"><h3>${title}</h3>
     ${bad.length?`<p class="muted">${bad.length} erreur${bad.length>1?"s":""} à retenir :</p><ul class="errlist">${bad.map(li).join("")}</ul>`:`<p class="muted">Aucune erreur.</p>`}
     ${good.length?`<details class="fiche corr"><summary>Revoir les ${good.length} bonne${good.length>1?"s":""} réponse${good.length>1?"s":""} et leur explication</summary><ul class="errlist">${good.map(li).join("")}</ul></details>`:""}
@@ -1548,7 +1550,18 @@ function bindCas(){
 /* ---------- Examen blanc ----------
    Questions tirées dans tous les thèmes de l'objectif, chrono, pas de correction avant la fin, note sur 20. */
 let exam = null, exTimer = null;
-let exSetup = {n:20, min:30, f:"libre"};
+let exSetup = {n:20, min:30, f:"libre", bar:false};
+/* Format concours : cases à cocher, nombre de bonnes réponses non indiqué. it.a = tableau d'indices, it.ok = bonnes réponses ([0] pour la banque). */
+const exSel = it => Array.isArray(it.a) ? it.a : (it.a===null || it.a===undefined ? [] : [it.a]);
+const exAns = it => exSel(it).length > 0;
+function exGood(it){ const s = exSel(it), k = it.ok || [0]; return s.length===k.length && k.every(i=>s.includes(i)); }
+const annItem = (A, x) => ({q:{id:"ann:"+A.id+":"+x.n, q:`<b>Question ${x.n}.</b> ${x.q}`, o:x.o, e:x.e, d:x.d}, order:x.o.map((_,i)=>i), a:[], ok:x.ok, ann:1});
+const annOf = id => (typeof ANNALES!=="undefined" ? ANNALES : []).find(a=>a.id===id);
+function startAnnale(id){
+  const A = annOf(id); if(!A) return;
+  exam = {f:"ann", ann:id, bar:true, pen:A.pen, items:A.qs.map(x=>annItem(A,x)), i:0, start:Date.now(), end:Date.now()+A.min*60000, min:A.min, done:false, confirm:false};
+  runExamTimer();
+}
 // Formats d'après la note de cadrage indicative des épreuves du concours externe de caporal de SPP.
 const CADRAGE = "Note de cadrage indicative, concours externe de caporal de SPP";
 const EX_FMT = {
@@ -1561,7 +1574,8 @@ const fmtTime = ms => { const s = Math.max(0, Math.ceil(ms/1000)); return pad(Ma
 const noteFr = n => String(n).replace(".", ",");
 function startExam(){
   const pool = shuffle(exPool()).slice(0, exSetup.n);
-  exam = {f:exSetup.f, items:pool.map(q0=>{ const q = view(q0); return {q, sd:q.sd, order:shuffle(q.o.map((_,i)=>i)), a:null}; }), i:0, start:Date.now(), end:Date.now()+exSetup.min*60000, min:exSetup.min, done:false, confirm:false};
+  const bar = !!exSetup.bar;
+  exam = {f:exSetup.f, bar, pen:exSetup.f==="math"?0:0.5, items:pool.map(q0=>{ const q = view(q0); return {q, sd:q.sd, order:shuffle(q.o.map((_,i)=>i)), a:bar?[]:null}; }), i:0, start:Date.now(), end:Date.now()+exSetup.min*60000, min:exSetup.min, done:false, confirm:false};
   runExamTimer();
 }
 function runExamTimer(){
@@ -1577,25 +1591,46 @@ function runExamTimer(){
 function finishExam(timeout){
   if(!exam || exam.done) return;
   clearInterval(exTimer);
-  const n = exam.items.length, ok = exam.items.filter(it=>it.a===0).length;
+  const n = exam.items.length;
+  exam.items.forEach(it => { it.good = exGood(it); });
+  const ok = exam.items.filter(it=>it.good).length;
+  const pts = exam.bar ? exam.items.reduce((t,it)=>t+(!exAns(it)?0:it.good?1:-(exam.pen||0)),0) : ok;
   exam.done = true; exam.timeout = !!timeout;
   exam.used = Math.min(Date.now(), exam.end) - exam.start;
-  exam.note = Math.round(ok*20/n*10)/10; exam.ok = ok;
-  exam.items.forEach(it => { if(it.a!==null) recordQ(it.q, it.a===0); });
-  S.ex.push({d:Date.now(), n, ok, note:exam.note, min:exam.min, used:Math.round(exam.used/1000), ...(exam.f && exam.f!=="libre" ? {f:exam.f} : {})});
+  exam.pts = pts; exam.note = Math.round(Math.max(0,pts)*20/n*10)/10; exam.ok = ok;
+  if(!exam.ann) exam.items.forEach(it => { if(exAns(it)) recordQ(it.q, it.good); });
+  const f = exam.ann ? "ann:"+exam.ann : exam.f;
+  S.ex.push({d:Date.now(), n, ok, note:exam.note, min:exam.min, used:Math.round(exam.used/1000), ...(f && f!=="libre" ? {f} : {}), ...(exam.bar ? {bar:1, pts} : {})});
   if(S.ex.length > 100) S.ex = S.ex.slice(-100);
   save();
   if(route()==="examen") render();
 }
-function exAnswer(oi){ if(!exam||exam.done) return; exam.items[exam.i].a = oi; exam.confirm = false; render(); }
+function exAnswer(oi){
+  if(!exam||exam.done) return;
+  const it = exam.items[exam.i];
+  if(exam.bar){ const s = exSel(it); it.a = s.includes(oi) ? s.filter(i=>i!==oi) : [...s, oi]; } else it.a = oi;
+  exam.confirm = false; render();
+}
 function exGo(i){ if(!exam||exam.done) return; exam.i = Math.max(0, Math.min(exam.items.length-1, i)); exam.confirm = false; render(); }
+function exLabel(e){
+  const a = e.f && e.f.startsWith("ann:") ? annOf(e.f.slice(4)) : null;
+  return (a ? "Annale · "+a.titre+" · " : e.f && EX_FMT[e.f] ? EX_FMT[e.f].n+" · " : "") + (e.bar ? "barème concours · " : "");
+}
+function annSection(){
+  if(typeof ANNALES==="undefined" || !ANNALES.length) return "";
+  return `<section class="panel" style="display:grid;gap:10px"><span class="label">Annales officielles · session 2023</span>
+    <h3 style="margin:0">Sujets du 21 novembre 2023 (SDIS 35)</h3>
+    <p class="muted" style="font-size:.9rem;margin:0">Vrais sujets du concours, en conditions réelles : chrono, cases à cocher, barème du sujet (−0,5 par réponse fausse ou incomplète sur les QCM). Ouvre le PDF officiel pour lire le texte support. Aucun corrigé officiel n'est publié : la correction affichée est une <b>correction proposée</b>, justifiée par le texte, le calcul ou un guide ; les réponses douteuses sont signalées.</p>
+    <div style="display:grid;gap:8px">${ANNALES.map(a=>`<div class="ocrit"><div><b>${a.titre}</b><small>${a.voie} · ${a.epreuve} · ${a.qs.length} questions · ${a.min} min · <a href="${a.pdf}" target="_blank" rel="noopener">sujet PDF</a></small></div><button type="button" class="btn" data-ann="${a.id}">Commencer</button></div>`).join("")}</div>
+  </section>`;
+}
 function exHistory(){
   if(!S.ex.length) return "";
   const last = S.ex.slice(-8).reverse();
   const best = Math.max(...S.ex.map(e=>e.note));
   return `<section style="display:grid;gap:10px"><h3>Mes examens blancs</h3>
     <p class="muted">Meilleure note : <b class="num">${noteFr(best)} / 20</b> · ${S.ex.length} examen${S.ex.length>1?"s":""} passé${S.ex.length>1?"s":""}</p>
-    <div class="themes">${last.map(e => `<div class="trow ex-row"><div class="name"><div>${new Date(e.d).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"})}<small>${e.f && EX_FMT[e.f] ? EX_FMT[e.f].n+" · " : ""}${e.ok} / ${e.n} bonnes réponses · ${Math.round(e.used/60)} min sur ${e.min}${e.note<5 ? " · éliminatoire" : ""}</small></div></div><div class="bar" title="${noteFr(e.note)} / 20"><i style="width:${e.note*5}%"></i></div><b class="num">${noteFr(e.note)}</b></div>`).join("")}</div></section>`;
+    <div class="themes">${last.map(e => `<div class="trow ex-row"><div class="name"><div>${new Date(e.d).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"})}<small>${exLabel(e)}${e.ok} / ${e.n} bonnes réponses · ${Math.round(e.used/60)} min sur ${e.min}${e.note<5 ? " · éliminatoire" : ""}</small></div></div><div class="bar" title="${noteFr(e.note)} / 20"><i style="width:${e.note*5}%"></i></div><b class="num">${noteFr(e.note)}</b></div>`).join("")}</div></section>`;
 }
 /* Simulateur de note de concours : écrits coef 1 + 1, épreuves physiques coef 4, entretien coef 4 (note de cadrage). */
 let sim = null;
@@ -1645,44 +1680,51 @@ function vExamen(){
   if(exSetup.n > avail && avail) exSetup.n = [20,25,30,40,60].filter(n=>n<=avail).pop() || exSetup.n;
   if(!exam) return `
     <section style="display:grid;gap:8px"><span class="label">Examen blanc · ${LV[S.obj]}</span><h2>Examen blanc</h2>
-    <p class="lead">Conditions d'épreuve : questions tirées au hasard, chrono, aucune correction avant de rendre la copie. Note sur 20, sans points négatifs. Tu peux revenir sur une question tant que tu n'as pas rendu.</p>
-    <p class="muted" style="font-size:.9rem">Au concours, chaque épreuve écrite dure 1 h et compte coefficient 1. Une note sous 5 / 20 à une épreuve écrite est éliminatoire. Une question peut y avoir une ou plusieurs bonnes réponses, et le barème (points retirés éventuels) est écrit sur le sujet ; ici, chaque question a une seule bonne réponse. (${CADRAGE})</p></section>
+    <p class="lead">Conditions d'épreuve : questions tirées au hasard, chrono, aucune correction avant de rendre la copie. Note sur 20, sans points négatifs, sauf en format concours. Tu peux revenir sur une question tant que tu n'as pas rendu.</p>
+    <p class="muted" style="font-size:.9rem">Au concours, chaque épreuve écrite dure 1 h et compte coefficient 1. Une note sous 5 / 20 à une épreuve écrite est éliminatoire. Une question peut y avoir une ou plusieurs bonnes réponses, et le barème (points retirés éventuels) est écrit sur le sujet. Les questions de la banque n'ont qu'une bonne réponse ; le format concours te fait cocher sans savoir combien il y en a, avec le barème des sujets 2023 : 1 point si tout est juste, 0 sans réponse, −0,5 si c'est faux ou incomplet (pas de pénalité en maths). (${CADRAGE})</p></section>
     <div class="panel">
       <span class="label">Format</span>
       <div class="chips" id="exf">${Object.entries(EX_FMT).map(([k,v])=>`<button type="button" class="chip" data-f="${k}" aria-pressed="${exSetup.f===k}">${v.n}</button>`).join("")}</div>
       <p class="muted" style="font-size:.9rem;margin:0">${F.d}</p>
       <span class="label">Nombre de questions</span>
       <div class="chips" id="exn">${[20,25,30,40,60].map(n=>`<button type="button" class="chip" data-n="${n}" aria-pressed="${exSetup.n===n}" ${n>avail?"disabled":""}>${n}</button>`).join("")}</div>
+      <span class="label">Barème</span>
+      <div class="chips" id="exbar"><button type="button" class="chip" data-b="0" aria-pressed="${!exSetup.bar}">Simple (1 bonne réponse, sans pénalité)</button><button type="button" class="chip" data-b="1" aria-pressed="${!!exSetup.bar}">Format concours (cases à cocher, −0,5)</button></div>
       <span class="label">Durée</span>
       <div class="chips" id="exm">${[15,30,45,60].map(m=>`<button type="button" class="chip" data-m="${m}" aria-pressed="${exSetup.min===m}">${m} min</button>`).join("")}</div>
       <p class="muted" style="font-size:.9rem">${avail} questions disponibles pour ce format et l'objectif « ${LV[S.obj]} ». L'arrêté d'ouverture de ton concours fait foi pour le format exact.</p>
       <div><button type="button" class="btn primary" id="exgo" ${avail?"":"disabled"}>Commencer l'examen</button></div>
     </div>
+    ${annSection()}
     ${exHistory()}
     ${simHtml()}`;
   const n = exam.items.length;
   if(exam.done){
-    const miss = exam.items.filter(it=>it.a!==0);
-    const pctOk = Math.round(100*exam.ok/n);
+    const pctOk = Math.round(100*exam.ok/n), A = exam.ann ? annOf(exam.ann) : null;
+    const nNone = exam.items.filter(it=>!exAns(it)).length, nBad = n-exam.ok-nNone;
     return `<section class="panel">
-      <span class="label">Examen blanc · ${exam.timeout?"temps écoulé":"copie rendue"}</span>
+      <span class="label">${A?"Annale · "+A.titre:"Examen blanc"} · ${exam.timeout?"temps écoulé":"copie rendue"}</span>
       <div class="score num">${noteFr(exam.note)}<span style="font-size:1.6rem"> / 20</span></div>
       <p class="lead">${exam.ok} bonnes réponses sur ${n} (${pctOk} %) en ${Math.round(exam.used/60000)} min. ${exam.note>=14?"Très bon niveau : continue à t'entraîner en conditions réelles.":exam.note>=10?"La moyenne est là. Reprends les questions ratées ci-dessous.":"En dessous de la moyenne : travaille les thèmes faibles avec les révisions du jour, puis refais un examen."}</p>
+      ${exam.bar ? `<p class="muted" style="margin:0">Barème concours : ${exam.ok} juste${exam.ok>1?"s":""} (+${exam.ok}), ${nBad} fausse${nBad>1?"s":""} ou incomplète${nBad>1?"s":""}${exam.pen?` (−${noteFr(nBad*exam.pen)})`:" (sans pénalité)"}, ${nNone} sans réponse : ${noteFr(Math.round(exam.pts*10)/10)} point${Math.abs(exam.pts)>1?"s":""} sur ${n}${exam.pts<0?", note ramenée à 0":""}.</p>` : ""}
+      ${A ? `<p class="muted" style="margin:0;font-size:.9rem">Correction proposée, pas de corrigé officiel. ${A.note} <a href="${A.pdf}" target="_blank" rel="noopener">Sujet officiel (PDF)</a></p>` : ""}
       ${exam.note<5 ? `<p class="explain no" style="margin:0"><b>Note éliminatoire</b> Au concours, une note inférieure à 5 / 20 à une épreuve écrite élimine le candidat. (${CADRAGE})</p>` : ""}
-      <p class="muted" style="font-size:.9rem">Les questions ratées reviendront dans tes révisions du jour.</p>
+      ${A ? "" : `<p class="muted" style="font-size:.9rem">Les questions ratées reviendront dans tes révisions du jour.</p>`}
       <div class="row"><button type="button" class="btn primary" id="exnew">Nouvel examen</button><a class="btn" href="#accueil">Tableau de bord</a></div>
     </section>
     ${corrList(exam.items,"Correction")}`;
   }
   const it = exam.items[exam.i], q = it.q;
-  const answered = exam.items.filter(x=>x.a!==null).length;
+  const answered = exam.items.filter(exAns).length, A = exam.ann ? annOf(exam.ann) : null, sel = exSel(it);
   return `<section style="display:grid;gap:14px">
-    <div class="qhead"><span class="label">Examen blanc · question ${exam.i+1} / ${n}</span><span class="timer num" id="extime" aria-label="Temps restant">${fmtTime(exam.end-Date.now())}</span></div>
+    ${A ? `<p class="muted" style="margin:0;font-size:.9rem">${A.support} <a href="${A.pdf}" target="_blank" rel="noopener">Ouvrir le sujet (PDF)</a></p>` : ""}
+    <div class="qhead"><span class="label">${A?A.titre:"Examen blanc"} · question ${exam.i+1} / ${n}</span><span class="timer num" id="extime" aria-label="Temps restant">${fmtTime(exam.end-Date.now())}</span></div>
     <div class="progress"><i style="width:${100*answered/n}%"></i></div>
     <p class="question">${q.q}</p>
-    <div class="opts">${it.order.map((oi,k)=>`<button type="button" class="opt ${it.a===oi?"sel":""}" data-oi="${oi}" aria-pressed="${it.a===oi}"><kbd>${k+1}</kbd><span>${q.o[oi]}</span></button>`).join("")}</div>
-    <div class="row"><button type="button" class="btn" id="exprev" ${exam.i?"":"disabled"}>Précédente</button><button type="button" class="btn ${it.a!==null?"primary":""}" id="exnext" ${exam.i<n-1?"":"disabled"}>Suivante</button><span class="muted kbd-hint" style="font-size:.85rem">Touches 1 à 4, flèches ← →</span></div>
-    <div class="qgrid" id="exgrid" aria-label="Aller à la question">${exam.items.map((x,k)=>`<button type="button" data-k="${k}" class="${x.a!==null?"done":""} ${k===exam.i?"cur":""}" aria-label="Question ${k+1}${x.a!==null?", répondue":""}">${k+1}</button>`).join("")}</div>
+    ${exam.bar ? `<p class="muted" style="margin:-6px 0 0;font-size:.85rem">Une ou plusieurs bonnes réponses : coche toutes celles qui sont justes.</p>` : ""}
+    <div class="opts">${it.order.map((oi,k)=>`<button type="button" class="opt ${sel.includes(oi)?"sel":""}" data-oi="${oi}" aria-pressed="${sel.includes(oi)}"><kbd>${exam.ann?"ABCDEF"[k]:k+1}</kbd><span>${exam.bar?(sel.includes(oi)?"☑ ":"☐ "):""}${q.o[oi]}</span></button>`).join("")}</div>
+    <div class="row"><button type="button" class="btn" id="exprev" ${exam.i?"":"disabled"}>Précédente</button><button type="button" class="btn ${exAns(it)?"primary":""}" id="exnext" ${exam.i<n-1?"":"disabled"}>Suivante</button><span class="muted kbd-hint" style="font-size:.85rem">${exam.ann?"Touches A à D":"Touches 1 à 4"}, flèches ← →</span></div>
+    <div class="qgrid" id="exgrid" aria-label="Aller à la question">${exam.items.map((x,k)=>`<button type="button" data-k="${k}" class="${exAns(x)?"done":""} ${k===exam.i?"cur":""}" aria-label="Question ${x.ann?x.q.id.split(":").pop():k+1}${exAns(x)?", répondue":""}">${x.ann?x.q.id.split(":").pop():k+1}</button>`).join("")}</div>
     <div class="confirm">${exam.confirm
       ? `<span>${n-answered} question${n-answered>1?"s":""} sans réponse. Rendre quand même ?</span><button type="button" class="btn primary" id="exyes">Rendre la copie</button><button type="button" class="btn" id="exno">Continuer</button>`
       : `<button type="button" class="btn ${answered===n?"primary":""}" id="exend">Rendre la copie (${answered} / ${n})</button>`}</div>
@@ -1694,13 +1736,15 @@ function bindExamen(){
   const xn=$("#exn"); if(xn) xn.onclick=e=>{const b=e.target.closest("[data-n]"); if(b&&!b.disabled){exSetup.n=+b.dataset.n; render();}};
   const xm=$("#exm"); if(xm) xm.onclick=e=>{const b=e.target.closest("[data-m]"); if(b){exSetup.min=+b.dataset.m; render();}};
   const go=$("#exgo"); if(go) go.onclick=()=>{ startExam(); render(); };
+  const xb=$("#exbar"); if(xb) xb.onclick=e=>{const b=e.target.closest("[data-b]"); if(b){exSetup.bar=b.dataset.b==="1"; render();}};
+  document.querySelectorAll("[data-ann]").forEach(b=>b.onclick=()=>{ startAnnale(b.dataset.ann); render(); window.scrollTo(0,0); });
   const nw=$("#exnew"); if(nw) nw.onclick=()=>{ exam=null; render(); };
   if(!exam || exam.done) return;
   document.querySelectorAll(".opt").forEach(b=>b.onclick=()=>exAnswer(+b.dataset.oi));
   $("#exprev").onclick=()=>exGo(exam.i-1);
   $("#exnext").onclick=()=>exGo(exam.i+1);
   $("#exgrid").onclick=e=>{ const b=e.target.closest("[data-k]"); if(b) exGo(+b.dataset.k); };
-  const end=$("#exend"); if(end) end.onclick=()=>{ if(exam.items.every(x=>x.a!==null)) finishExam(false); else { exam.confirm=true; render(); } };
+  const end=$("#exend"); if(end) end.onclick=()=>{ if(exam.items.every(exAns)) finishExam(false); else { exam.confirm=true; render(); } };
   const y=$("#exyes"); if(y) y.onclick=()=>finishExam(false);
   const no=$("#exno"); if(no) no.onclick=()=>{ exam.confirm=false; render(); };
 }
@@ -1724,7 +1768,7 @@ function saveRun(){
   if(quizRunning()) r.quiz = {items:quiz.items.map(it=>[it.q.id,it.order,it.fmt||"qcm",it.s??null,it.v??null,it.vals||null,it.as||null,it.sd??null]), i:quiz.i, picked:quiz.picked, score:quiz.score, wrong:quiz.wrong.map(q=>q.id), log:(quiz.log||[]).map(x=>[x.q.id,x.a,x.as||null]), t:quiz.t||0, sd:quiz.sd||"", rec0:quiz.rec0||0};
   if(deck && deck.i < deck.items.length) r.deck = {ids:deck.items.map(c=>c.id), i:deck.i, flip:deck.flip, known:deck.known};
   if(casRun && casRun.i < casRun.c.steps.length) r.cas = {id:casRun.c.id, i:casRun.i, picked:casRun.picked, score:casRun.score, order:casRun.order};
-  if(exam && !exam.done) r.exam = {items:exam.items.map(it=>[it.q.id,it.order,it.a,it.sd??null]), i:exam.i, left:exam.end-Date.now(), min:exam.min, f:exam.f||"libre"};
+  if(exam && !exam.done) r.exam = {items:exam.items.map(it=>[it.q.id,it.order,it.a,it.sd??null]), i:exam.i, left:exam.end-Date.now(), min:exam.min, f:exam.f||"libre", bar:exam.bar?1:0, pen:exam.pen||0, ann:exam.ann||null};
   LS.set("run", r);
 }
 function restoreRun(){
@@ -1739,10 +1783,12 @@ function restoreRun(){
     if(r.deck){ const items = r.deck.ids.map(id=>FBY.get(id)); if(items.every(Boolean)) deck = {items, i:r.deck.i, flip:r.deck.flip, known:r.deck.known}; }
     if(r.cas){ const c = CAS.find(x=>x.id===r.cas.id); if(c) casRun = {c, i:r.cas.i, picked:r.cas.picked, score:r.cas.score, order:r.cas.order}; }
     if(r.exam){
-      const items = r.exam.items.map(([id,order,a,sd])=>({q:sd==null?QBY.get(id):view(QBY.get(id),sd), sd:sd??undefined, order, a}));
-      if(items.every(it=>it.q)){
+      const A = r.exam.ann ? annOf(r.exam.ann) : null;
+      const items = A ? A.qs.map((x,k)=>({...annItem(A,x), a:(r.exam.items[k]||[])[2]||[]}))
+        : r.exam.items.map(([id,order,a,sd])=>({q:sd==null?QBY.get(id):view(QBY.get(id),sd), sd:sd??undefined, order, a}));
+      if(items.length && items.every(it=>it.q) && (!r.exam.ann || A)){
         const left = Math.max(1000, r.exam.left), now = Date.now();
-        exam = {f:r.exam.f||"libre", items, i:r.exam.i, min:r.exam.min, end:now+left, start:now+left-r.exam.min*60000, done:false, confirm:false};
+        exam = {f:r.exam.f||"libre", bar:!!r.exam.bar, pen:r.exam.pen||0, ann:r.exam.ann||undefined, items, i:r.exam.i, min:r.exam.min, end:now+left, start:now+left-r.exam.min*60000, done:false, confirm:false};
         runExamTimer();
       }
     }
