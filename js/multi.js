@@ -2,6 +2,7 @@
 // o = 4 propositions, ok = indices des bonnes réponses. Source en fin d'explication.
 const QMULTI=(()=>{
 const S={
+ cis:"(CGCT, art. R1424-39 ; Règlement opérationnel SDIS 83, 2026)",
  ssuap:"(GDO Secours et soins d'urgence aux personnes 2022)",
  vicie:"(GTO Engagement en milieu vicié 2024)",
  struct:"(GDO Interventions sur les incendies de structures 2018)",
@@ -175,8 +176,8 @@ M("Quelles sont les phases d'un défusing ?",["L'introduction","L'exploration","
  "Le défusing se réalise en trois phases : introduction, exploration, information.","cmd")
 ],
 cult:[
-M("Comment sont classés les centres d'incendie et de secours ?",["Centre de secours principal (CSP)","Centre de secours (CS)","Centre de première intervention (CPI)","Centre de traitement de l'alerte (CTA)"],[0,1,2],
- "Découlant du SDACR : centre de secours principal (CSP), centre de secours (CS), centre de première intervention (CPI). Le CTA traite les appels, ce n'est pas un CIS.","cmd"),
+M("Sur quoi se fonde l'arrêté du préfet qui crée et classe les centres d'incendie et de secours ?",["Le SDACR","Le règlement opérationnel","Le nombre et le type de départs en intervention assurés","Le nombre d'habitants de la commune d'implantation"],[0,1,2],
+ "Les CIS sont créés et classés par arrêté du préfet en fonction du SDACR, du règlement opérationnel et du nombre et type de départs assurés simultanément. Les appellations CSP, CS et CPI sont l'ancienne terminologie.","cis"),
 M("Quelles sont des qualités physiques fondamentales du sapeur-pompier selon le GDO ?",["La force","L'endurance","La souplesse","La taille"],[0,1,2],
  "Le maintien d'une condition physique adaptée repose sur la force, l'endurance, la souplesse, l'adresse et la vitesse.","cmd"),
 M("Quelles récompenses peuvent recevoir les sapeurs-pompiers pour des actes de courage et de dévouement ?",["Une lettre de félicitations","La médaille pour actes de courage et de dévouement","Une citation","Une promotion automatique au grade supérieur"],[0,1,2],
