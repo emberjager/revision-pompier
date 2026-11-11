@@ -5,6 +5,8 @@ const ALLQ = Object.entries(QDATA).flatMap(([t,arr]) => arr.map(x => { const id 
 /* Cartes mémoire : une carte par question de la banque (les anciennes cartes mot-clé de FDATA ne sont plus affichées). */
 /* Questions à plusieurs bonnes réponses (js/multi.js) : format concours, on coche toutes les bonnes. ok = indices justes. */
 const MULTI = typeof QMULTI === "object" && QMULTI ? Object.entries(QMULTI).flatMap(([t,arr]) => arr.map(x => ({...x, t, id:"m-"+t+"-"+hash(x.q), multi:1}))) : [];
+/* Questions « remettre dans l'ordre » (js/ordre.js) : o = étapes dans le bon ordre, ok = 0..n-1. */
+const ORDRE = typeof QORDRE === "object" && QORDRE ? Object.entries(QORDRE).flatMap(([t,arr]) => arr.map(x => ({...x, t, id:"o-"+t+"-"+hash(x.q), ordre:1, ok:x.o.map((_,i)=>i)}))) : [];
 const cardOf = q => ({id:"c:"+q.id, t:q.t, l:q.l, q});
 
 /* ---------- Stockage local ---------- */
@@ -84,6 +86,7 @@ const lvQ = () => ALLQ.filter(lvOk);
 /* Référentiels décochés dans les Réglages : leurs questions disparaissent de partout (si tout est décoché, on garde tout). */
 const visQ = () => { const off = S.srcOff.off, l = lvQ(); if(!off.length) return l; const r = l.filter(q => q.mine || !off.includes(srcOf(q))); return r.length ? r : l; };
 const visM = () => { const off = S.srcOff.off, l = MULTI.filter(lvOk); if(!off.length) return l; const r = l.filter(q => !off.includes(srcOf(q))); return r.length ? r : l; };
+const visO = () => { const off = S.srcOff.off, l = ORDRE.filter(lvOk); if(!off.length) return l; const r = l.filter(q => !off.includes(srcOf(q))); return r.length ? r : l; };
 const visF = () => visQ().map(cardOf);
 const themesForLevel = () => Object.keys(TH).filter(t => visQ().some(q=>q.t===t));
 const activeThemes = () => { const avail = themesForLevel(); const sel = S.themes.filter(t=>avail.includes(t)); return sel.length?sel:avail; };
@@ -1129,7 +1132,7 @@ const NEGQ = /n.est pas|ne [^?]{0,30} pas|faux|sauf|incorrect|inexact/i;
 const nNums = o => (o.match(NUMRE)||[]).length;
 const canTxt = q => !/</.test(q.o[0]) && q.o[0].length <= 40 && nNums(q.o[0]) >= 1 && nNums(q.o[0]) <= 3 && !NEGQ.test(q.q);
 const canVf = q => !q.o.some(o => /toutes|aucune|les deux|tous les|ensemble des/i.test(o));
-const FMT = {mix:"Mélangé", qcm:"QCM seul", vf:"Vrai / faux", txt:"À compléter", multi:"Plusieurs réponses"};
+const FMT = {mix:"Mélangé", qcm:"QCM seul", vf:"Vrai / faux", txt:"À compléter", multi:"Plusieurs réponses", ordre:"Remettre dans l'ordre"};
 function fmtFor(q, f){
   if(f==="qcm") return "qcm";
   const v = canVf(q), x = canTxt(q);
@@ -1137,7 +1140,9 @@ function fmtFor(q, f){
   if(f==="txt") return x ? "txt" : "qcm";
   const r = Math.random(); return x && r < .3 ? "txt" : v && r >= .7 ? "vf" : "qcm"; // mélangé : 30 % à compléter (si possible), 30 % vrai/faux, le reste en QCM
 }
+const mixOrd = n => { let o; do o = shuffle([...Array(n).keys()]); while(n>1 && o.every((x,i)=>x===i)); return o; };
 function mkItem(q0, f){
+  if(q0.ordre) return {q:q0, order:mixOrd(q0.o.length), fmt:"ordre"};
   if(q0.multi) return {q:q0, order:shuffle(q0.o.map((_,i)=>i)), fmt:"multi", sel:[]};
   const q = view(q0), it = {q, sd:q.sd, order:shuffle(q.o.map((_,i)=>i)), fmt:fmtFor(q, f)};
   if(it.fmt==="vf") it.s = Math.random() < .5 ? 0 : 1 + Math.floor(Math.random()*(q.o.length-1)); // proposition montrée : la bonne une fois sur deux
@@ -1151,7 +1156,7 @@ function trous(ans){
 const numEq = (a, b) => { const x = String(a).trim().replace(/\s/g,"").replace(",","."), y = b.replace(",","."); return x !== "" && (x === y || (/^\d+(\.\d+)?$/.test(x) && parseFloat(x) === parseFloat(y))); };
 function startQuiz(themes, n, mode, off, t, fmt){
   fmt = fmt || qcmSetup.fmt || "mix";
-  let pool = (fmt==="multi" ? visM() : visQ()).filter(q=> themes.includes(q.t) && !(off||[]).includes(srcKey(q)));
+  let pool = (fmt==="multi" ? visM() : fmt==="ordre" ? visO() : visQ()).filter(q=> themes.includes(q.t) && !(off||[]).includes(srcKey(q)));
   if(mode!=="day"){ if(fmt==="vf") pool = pool.filter(canVf); if(fmt==="txt") pool = pool.filter(canTxt); }
   if(mode==="err") pool = pool.filter(q=>S.qp[q.id]&&!S.qp[q.id].ok);
   if(mode==="new") pool = pool.filter(q=>!S.qp[q.id]);
@@ -1231,7 +1236,7 @@ function vQcm(){
       <p class="muted" style="font-size:.9rem"><a href="#mesq">✎ Ajouter mes propres questions</a> : elles entrent dans les quiz de leur thème.</p>
       <span class="label">Format des questions</span>
       <div class="chips" id="qf">${Object.entries(FMT).map(([k,v])=>`<button type="button" class="chip" data-f="${k}" aria-pressed="${(qcmSetup.fmt||"mix")===k}">${v}</button>`).join("")}</div>
-      <p class="muted" style="font-size:.9rem">${{mix:"QCM, vrai / faux et textes à trous mélangés : on retient mieux en changeant de forme.", qcm:"Quatre propositions, une seule bonne.", vf:"Une seule proposition : tu dis si c'est la bonne réponse ou non.", txt:"La bonne réponse s'affiche avec des trous à la place des chiffres (durées, distances, pressions…) : à toi de les retrouver.", multi:"Comme au concours : une à quatre propositions peuvent être justes. Coche toutes les bonnes, puis valide. Questions tirées des GDO et GTO."}[qcmSetup.fmt||"mix"]}</p>
+      <p class="muted" style="font-size:.9rem">${{mix:"QCM, vrai / faux et textes à trous mélangés : on retient mieux en changeant de forme.", qcm:"Quatre propositions, une seule bonne.", vf:"Une seule proposition : tu dis si c'est la bonne réponse ou non.", txt:"La bonne réponse s'affiche avec des trous à la place des chiffres (durées, distances, pressions…) : à toi de les retrouver.", multi:"Comme au concours : une à quatre propositions peuvent être justes. Coche toutes les bonnes, puis valide. Questions tirées des GDO et GTO.", ordre:"Glisse les étapes pour les remettre dans l'ordre (ou utilise les flèches ↑ ↓), puis valide. Marches générales des opérations, ordres initiaux, messages : choisis les thèmes Secours routier, Incendie et Commandement."}[qcmSetup.fmt||"mix"]}</p>
       <span class="label">Chrono par question</span>
       <div class="chips" id="qt">${[[0,"Sans"],[15,"15 s"],[30,"30 s"],[60,"60 s"]].map(([k,v])=>`<button type="button" class="chip" data-tm="${k}" aria-pressed="${(qcmSetup.t||0)===k}">${v}</button>`).join("")}</div>
       ${qcmSetup.t?`<p class="muted" style="font-size:.9rem">Mode vitesse : une réponse non donnée à temps compte comme une erreur. Le chrono se met en pause si tu quittes l'appli.</p>`:""}
@@ -1280,6 +1285,12 @@ function vQcm(){
       if(done){ if(ok.includes(oi)) cls+=" right"; else if(on) cls+=" wrong"; } else if(on) cls+=" sel";
       return `<button type="button" class="${cls}" data-mi="${oi}" aria-pressed="${on}" ${done?"disabled":""}><kbd>${k+1}</kbd><span>${on?"☑ ":"☐ "}${q.o[oi]}</span></button>`;
     }).join("")}</div>${done ? "" : `<div class="row"><button type="button" class="btn primary" id="qmv" ${sel.length?"":"disabled"}>Valider</button><span class="muted kbd-hint" style="font-size:.85rem">Entrée pour valider</span></div>`}`;
+  } else if(fmt==="ordre"){
+    const ord = it.order, last = ord.length-1;
+    body = `<span class="label">Remets dans l'ordre · glisse les étapes par leur poignée ou utilise les flèches</span><ol class="ordre" id="qord">${ord.map((oi,k) => {
+      const okp = oi===k, cls = "oitem" + (done ? (okp ? " right" : " wrong") : "");
+      return `<li class="${cls}" data-k="${k}" ${done?"":`tabindex="0" aria-label="Position ${k+1} : ${esc(q.o[oi])}. Flèches haut et bas pour déplacer."`}><span class="grip" aria-hidden="true">${done ? (okp?"✓":"✗") : "⠿"}</span><span class="onum num">${k+1}</span><span class="otx">${q.o[oi]}${done && !okp ? ` <span class="muted">(place ${oi+1})</span>` : ""}</span>${done ? "" : `<span class="obtn"><button type="button" class="btn" data-up="${k}" aria-label="Monter" ${k?"":"disabled"}>↑</button><button type="button" class="btn" data-dn="${k}" aria-label="Descendre" ${k<last?"":"disabled"}>↓</button></span>`}</li>`;
+    }).join("")}</ol>${done ? "" : `<div class="row"><button type="button" class="btn primary" id="qov">Valider l'ordre</button><span class="muted kbd-hint" style="font-size:.85rem">Flèches ↑ ↓ sur une étape, Entrée pour valider</span></div>`}`;
   } else body = `<div class="opts">${it.order.map((oi,k) => {
     let cls = "opt";
     if(done){ if(oi===0) cls+=" right"; else if(oi===quiz.picked) cls+=" wrong"; }
@@ -1295,11 +1306,11 @@ function vQcm(){
     ${done || q.gen ? "" : srsTag(q)}
     <p class="question">${q.q}</p>
     ${body}
-    ${done?`<div class="explain ${good?"":"no"}" role="status"><b>${good?"✓ Bonne réponse":timeout?"⏱ Temps écoulé":"✗ Mauvaise réponse"}</b>${good?"":`${timeout?"":`<p class="ans">Ta réponse : ${it.as || q.o[quiz.picked]}</p>`}<p class="ans ok">${q.multi ? "Bonnes réponses : "+q.ok.map(i=>q.o[i]).join(" ; ") : "Bonne réponse : "+q.o[0]}</p>`}${explainBody(q)}${!good && !timeout && fmt==="txt" && !quiz.sd ? `<p><button type="button" class="btn" id="qforce">J'avais juste (mal tapé)</button></p>` : ""}</div>
+    ${done?`<div class="explain ${good?"":"no"}" role="status"><b>${good?"✓ Bonne réponse":timeout?"⏱ Temps écoulé":"✗ Mauvaise réponse"}</b>${good?"":`${timeout?"":`<p class="ans">Ta réponse : ${it.as || q.o[quiz.picked]}</p>`}<p class="ans ok">${q.multi ? "Bonnes réponses : "+q.ok.map(i=>q.o[i]).join(" ; ") : q.ordre ? "Bon ordre : "+q.o.map((x,i)=>(i+1)+". "+x).join(" → ") : "Bonne réponse : "+q.o[0]}</p>`}${explainBody(q)}${!good && !timeout && fmt==="txt" && !quiz.sd ? `<p><button type="button" class="btn" id="qforce">J'avais juste (mal tapé)</button></p>` : ""}</div>
     ${good && !q.gen?`<div class="conf"><span>Tu étais :</span><div class="chips" id="qconf"><button type="button" class="chip" data-c="sur" aria-pressed="${it.conf!=="hes"}">Sûr</button><button type="button" class="chip" data-c="hes" aria-pressed="${it.conf==="hes"}">Hésitant <kbd class="kbd-hint">H</kbd></button></div></div>`:""}
     <p class="srs muted">${srsNext(q, it)}</p>
     <div class="row"><button type="button" class="btn primary" id="qnext">${quiz.i+1<n?"Question suivante":"Voir le résultat"}</button><span class="muted kbd-hint" style="font-size:.85rem">Entrée ou Espace</span></div>`
-    :`<p class="muted kbd-hint" style="font-size:.85rem">${fmt==="vf" ? "Touche 1 = vrai, 2 = faux" : fmt==="multi" ? "Touches 1 à 4 pour cocher, Entrée pour valider" : fmt==="txt" ? "Tape les chiffres puis Entrée" : "Touches 1 à 4 ou A à D pour répondre"}${q.gen?"":" · F favori"} · S signaler</p>`}
+    :`<p class="muted kbd-hint" style="font-size:.85rem">${fmt==="vf" ? "Touche 1 = vrai, 2 = faux" : fmt==="multi" ? "Touches 1 à 4 pour cocher, Entrée pour valider" : fmt==="ordre" ? "Flèches ↑ ↓ sur une étape pour la déplacer, Entrée pour valider" : fmt==="txt" ? "Tape les chiffres puis Entrée" : "Touches 1 à 4 ou A à D pour répondre"}${q.gen?"":" · F favori"} · S signaler</p>`}
     <div class="qtools">
       ${q.gen ? "" : `<button type="button" class="btn" id="qfav" aria-pressed="${fav}" title="Mettre en favori (touche F)">${fav?"★ En favori":"☆ Favori"}</button>`}
       <button type="button" class="btn" id="qrep" ${quiz.repOpen?'aria-expanded="true"':""} title="Signaler une erreur ou un doute (touche S)">${reported?"⚑ Signalée":"⚑ Signaler"}</button>
@@ -1340,7 +1351,7 @@ function corrList(items, title){
   const isOk = it => it.good ?? it.a===0, none = it => it.a===null || it.a===undefined || (Array.isArray(it.a) && !it.a.length);
   const opt = (it,i) => (it.ann ? "ABCDEF"[i]+". " : "")+it.q.o[i];
   const bad = items.filter(it=>!isOk(it)), good = items.filter(isOk);
-  const li = it => `<li><p>${it.q.t?badge(it.q.t):""} ${it.q.q}</p>${isOk(it)?"":`<p class="yours">${none(it)?"Sans réponse":"Ta réponse : "+(it.as||(Array.isArray(it.a)?it.a.slice().sort().map(i=>opt(it,i)).join(" ; "):it.q.o[it.a]))}</p>`}<p>${isOk(it)?"✓ ":""}${(it.ok||[0]).map(i=>opt(it,i)).join(" ; ")}</p>${it.q.d?`<p class="muted" style="margin:0">⚠ Correction incertaine</p>`:""}${explainBody(it.q)}</li>`;
+  const li = it => `<li><p>${it.q.t?badge(it.q.t):""} ${it.q.q}</p>${isOk(it)?"":`<p class="yours">${none(it)?"Sans réponse":"Ta réponse : "+(it.as||(Array.isArray(it.a)?it.a.slice().sort().map(i=>opt(it,i)).join(" ; "):it.q.o[it.a]))}</p>`}<p>${isOk(it)?"✓ ":""}${(it.ok||[0]).map(i=>opt(it,i)).join(it.q.ordre ? " → " : " ; ")}</p>${it.q.d?`<p class="muted" style="margin:0">⚠ Correction incertaine</p>`:""}${explainBody(it.q)}</li>`;
   return `<section style="display:grid;gap:10px"><h3>${title}</h3>
     ${bad.length?`<p class="muted">${bad.length} erreur${bad.length>1?"s":""} à retenir :</p><ul class="errlist">${bad.map(li).join("")}</ul>`:`<p class="muted">Aucune erreur.</p>`}
     ${good.length?`<details class="fiche corr"><summary>Revoir les ${good.length} bonne${good.length>1?"s":""} réponse${good.length>1?"s":""} et leur explication</summary><ul class="errlist">${good.map(li).join("")}</ul></details>`:""}
@@ -1358,6 +1369,46 @@ function pickMulti(){
   const it = quiz.items[quiz.i], q = it.q, s = it.sel || []; if(it.fmt!=="multi" || !s.length) return;
   const ok = s.length===q.ok.length && q.ok.every(i=>s.includes(i));
   settle(ok ? 0 : -2, ok, s.slice().sort().map(i=>q.o[i]).join(" ; "));
+}
+/* Remettre dans l'ordre : déplacement par flèches ou glisser, juste seulement si tout l'ordre est exact */
+function moveOrdre(k, j, foc){
+  if(!quiz||quiz.picked!==null||quiz.i>=quiz.items.length) return;
+  const it = quiz.items[quiz.i]; if(it.fmt!=="ordre" || j<0 || j>=it.order.length || j===k) return;
+  const o = it.order.slice(), [x] = o.splice(k,1); o.splice(j,0,x); it.order = o; render();
+  const ol = $("#qord"); if(!ol || !foc) return;
+  const b = foc!=="li" && ol.querySelector(`[data-${foc}="${j}"]`), t = b && !b.disabled ? b : ol.children[j];
+  if(t) t.focus();
+}
+function pickOrdre(){
+  if(!quiz||quiz.picked!==null||quiz.i>=quiz.items.length) return;
+  const it = quiz.items[quiz.i], q = it.q; if(it.fmt!=="ordre") return;
+  const ok = it.order.every((oi,k)=>oi===k);
+  settle(ok ? 0 : -2, ok, it.order.map((oi,k)=>(k+1)+". "+q.o[oi]).join(" → "));
+}
+function bindOrdre(){
+  const ol = $("#qord"); if(!ol || !quiz || quiz.picked!==null) return;
+  const it = quiz.items[quiz.i];
+  ol.querySelectorAll("[data-up],[data-dn]").forEach(b=>b.onclick=()=>{ const up = b.dataset.up!=null, k = +(up ? b.dataset.up : b.dataset.dn); moveOrdre(k, up ? k-1 : k+1, up ? "up" : "dn"); });
+  ol.addEventListener("keydown", e=>{ const li = e.target; if(!li.matches || !li.matches("li[data-k]")) return; const k = +li.dataset.k;
+    if(e.key==="ArrowUp"){ e.preventDefault(); moveOrdre(k, k-1, "li"); } else if(e.key==="ArrowDown"){ e.preventDefault(); moveOrdre(k, k+1, "li"); } });
+  // Glisser : souris sur toute l'étape, doigt par la poignée (le reste de l'écran défile normalement)
+  let drag = null;
+  ol.addEventListener("pointerdown", e=>{
+    if(e.button>0 || e.target.closest("button")) return;
+    const li = e.target.closest("li[data-k]"); if(!li || (e.pointerType!=="mouse" && !e.target.closest(".grip"))) return;
+    e.preventDefault(); drag = {li, id:e.pointerId, y:e.clientY, moved:false}; try{ li.setPointerCapture(e.pointerId); }catch(_){}
+  });
+  ol.addEventListener("pointermove", e=>{
+    if(!drag || e.pointerId!==drag.id) return;
+    if(!drag.moved){ if(Math.abs(e.clientY-drag.y)<5) return; drag.moved = true; drag.li.classList.add("drag"); }
+    e.preventDefault();
+    let before = null;
+    for(const x of ol.children){ if(x===drag.li) continue; const r = x.getBoundingClientRect(); if(e.clientY < r.top + r.height/2){ before = x; break; } }
+    if(before!==drag.li.nextElementSibling || (!before && ol.lastElementChild!==drag.li)) ol.insertBefore(drag.li, before);
+  });
+  const end = e=>{ if(!drag || e.pointerId!==drag.id) return; const d = drag; drag = null; d.li.classList.remove("drag");
+    if(d.moved){ it.order = [...ol.children].map(x=>it.order[+x.dataset.k]); render(); } };
+  ol.addEventListener("pointerup", end); ol.addEventListener("pointercancel", end);
 }
 function pickVf(v){
   if(!quiz||quiz.picked!==null||quiz.i>=quiz.items.length) return;
@@ -1386,7 +1437,7 @@ function settle(picked, ok, as){
   const it = quiz.items[quiz.i], q = it.q; quiz.picked = picked; it.as = ok ? null : as;
   it.prev = S.qp[q.id] ? {...S.qp[q.id]} : null; it.conf = "sur";
   if(q.gen){ tick(); const m = S.mg[q.gen] || {n:0, c:0}; S.mg[q.gen] = {n:m.n+1, c:m.c+(ok?1:0)}; } else recordQ(q, ok);
-  (quiz.log=quiz.log||[]).push({q, a: picked===-1 ? null : ok ? 0 : picked, as: it.as, ...(q.multi ? {ok:q.ok} : {})});
+  (quiz.log=quiz.log||[]).push({q, a: picked===-1 ? null : ok ? 0 : picked, as: it.as, ...(q.multi || q.ordre ? {ok:q.ok} : {})});
   if(ok) quiz.score++; else quiz.wrong.push(q);
   if(quiz.sd){
     if(quiz.score > (S.sd[quiz.sd]||0)) S.sd[quiz.sd] = quiz.score;
@@ -1421,7 +1472,7 @@ function bindQcm(){
   const rk=$("#qrepk"); if(rk) rk.onclick=e=>{ const b=e.target.closest("[data-k]"); if(!b) return; quiz.repKind=b.dataset.k; rk.querySelectorAll("[data-k]").forEach(x=>x.setAttribute("aria-pressed", x===b)); };
   const rf=$("#qrepf"); if(rf) rf.onsubmit=e=>{
     e.preventDefault(); const q=quiz.items[quiz.i].q;
-    S.rep = [...S.rep.filter(r=>r.id!==q.id), {id:q.id, t:q.t, q:q.q.replace(/<[^>]+>/g,""), a:q.multi ? q.ok.map(i=>q.o[i]).join(" ; ") : q.o[0], kind:quiz.repKind==="doute"?"doute":"err", note:$("#qrepn").value.trim(), at:Date.now()}];
+    S.rep = [...S.rep.filter(r=>r.id!==q.id), {id:q.id, t:q.t, q:q.q.replace(/<[^>]+>/g,""), a:q.multi ? q.ok.map(i=>q.o[i]).join(" ; ") : q.ordre ? q.o.join(" → ") : q.o[0], kind:quiz.repKind==="doute"?"doute":"err", note:$("#qrepn").value.trim(), at:Date.now()}];
     quiz.repOpen=false; save(); render();
   };
   const rc=$("#qrepc"); if(rc) rc.onclick=()=>{ quiz.repOpen=false; render(); };
@@ -1453,6 +1504,8 @@ function bindQcm(){
   document.querySelectorAll(".opt[data-vf]").forEach(b=>b.onclick=()=>pickVf(+b.dataset.vf));
   document.querySelectorAll(".opt[data-mi]").forEach(b=>b.onclick=()=>toggleMulti(+b.dataset.mi));
   const mv=$("#qmv"); if(mv) mv.onclick=pickMulti;
+  const ov=$("#qov"); if(ov) ov.onclick=pickOrdre;
+  bindOrdre();
   const tx=$("#qtxt"); if(tx && quiz && quiz.picked===null){
     tx.onsubmit=e=>{ e.preventDefault(); const hs=[...tx.querySelectorAll(".hole")], vals=hs.map(i=>i.value);
       const empty=hs.find(i=>!i.value.trim()); if(empty){ empty.focus(); return; } pickTxt(vals); };
@@ -1467,7 +1520,7 @@ function bindQcm(){
   document.querySelectorAll("[data-mgn]").forEach(b=>b.onclick=()=>{ startGen(+b.dataset.mgn); render(); window.scrollTo(0,0); });
   const qg=$("#qgen"); if(qg) qg.onclick=()=>{ startGen(quiz.items.length); render(); window.scrollTo(0,0); };
   const ag=$("#qagain"); if(ag) ag.onclick=()=>{ quiz=null; render(); };
-  const er=$("#qerr"); if(er) er.onclick=()=>{ const w=quiz.wrong; quiz={items:w.map(q0=>{ if(q0.multi) return mkItem(q0, "multi"); const q = view(q0.base||q0); return {q, sd:q.sd, order:shuffle(q.o.map((_,i)=>i))}; }),i:0,picked:null,score:0,wrong:[],t:quiz.t}; render(); };
+  const er=$("#qerr"); if(er) er.onclick=()=>{ const w=quiz.wrong; quiz={items:w.map(q0=>{ if(q0.multi || q0.ordre) return mkItem(q0); const q = view(q0.base||q0); return {q, sd:q.sd, order:shuffle(q.o.map((_,i)=>i))}; }),i:0,picked:null,score:0,wrong:[],t:quiz.t}; render(); };
   qtStart();
 }
 
@@ -1827,7 +1880,7 @@ function render(){
 }
 /* Sessions en cours gardées sur l'appareil (départ en intervention, appli fermée…) puis retrouvées à la réouverture.
    L'examen blanc garde son temps restant : le chrono est en pause tant que l'appli est fermée. */
-const QBY = new Map([...ALLQ, ...MULTI].map(q=>[q.id,q]));
+const QBY = new Map([...ALLQ, ...MULTI, ...ORDRE].map(q=>[q.id,q]));
 ROUTES.mesq = "Mes questions"; VIEWS.mesq = [vMesq, bindMesq]; VIEWS.oral = [vOral, bindOral]; VIEWS.sport = [vSport, bindSport];
 injectMine();
 function saveRun(){
@@ -1845,7 +1898,7 @@ function restoreRun(){
       const items = r.quiz.items.map(([id,order,fmt,s,v,vals,as,sd])=>({q:sd==null?QBY.get(id):view(QBY.get(id),sd), sd:sd??undefined, order, fmt:fmt||"qcm", s:s??undefined, v:v??undefined, vals:fmt==="multi"?undefined:vals||undefined, sel:fmt==="multi"?vals||[]:undefined, as:as||null}));
       const shown = id => (items.find(it=>it.q&&it.q.id===id)||{}).q || QBY.get(id); // la formulation vue pendant le quiz
       if(items.every(it=>it.q) && r.quiz.i < items.length) quiz = {items, i:r.quiz.i, picked:r.quiz.picked, score:r.quiz.score,
-        wrong:r.quiz.wrong.map(shown).filter(Boolean), log:r.quiz.log.map(([id,a,as])=>{ const q = shown(id); return {q, a, as, ...(q && q.multi ? {ok:q.ok} : {})}; }).filter(x=>x.q), t:r.quiz.t||0, sd:r.quiz.sd||undefined, rec0:r.quiz.rec0||0};
+        wrong:r.quiz.wrong.map(shown).filter(Boolean), log:r.quiz.log.map(([id,a,as])=>{ const q = shown(id); return {q, a, as, ...(q && (q.multi || q.ordre) ? {ok:q.ok} : {})}; }).filter(x=>x.q), t:r.quiz.t||0, sd:r.quiz.sd||undefined, rec0:r.quiz.rec0||0};
     }
     if(r.deck && r.deck.k){ const qs = r.deck.ids.map(id=>QBY.get(String(id).slice(2))); if(qs.every(Boolean)){ deck = {items:qs.map((q,x)=>{ const [k,s0,sd]=r.deck.k[x]; return cardItem(cardOf(q),k,s0??undefined,sd); }), i:r.deck.i, flip:r.deck.flip, known:r.deck.known, vf:r.deck.vf}; cardFmt = r.deck.fmt||cardFmt; } }
     if(r.cas){ const c = CAS.find(x=>x.id===r.cas.id); if(c) casRun = {c, i:r.cas.i, picked:r.cas.picked, score:r.cas.score, order:r.cas.order}; }
@@ -1873,6 +1926,7 @@ document.addEventListener("keydown", e => {
     if(e.key==="Escape" && quiz.repOpen){ quiz.repOpen=false; render(); }
     else if(kx>=0 && quiz.picked===null){ const f=it.fmt||"qcm"; if(f==="vf"){ if(kx<2){ e.preventDefault(); pickVf(kx===0?1:0); } } else if(f==="multi" && kx<it.order.length){ e.preventDefault(); toggleMulti(it.order[kx]); } else if(f==="qcm" && kx<it.order.length){ e.preventDefault(); pick(it.order[kx]); } }
     else if(e.key==="Enter" && quiz.picked===null && it.fmt==="multi"){ e.preventDefault(); pickMulti(); }
+    else if(e.key==="Enter" && quiz.picked===null && it.fmt==="ordre" && !e.target.closest("button")){ e.preventDefault(); pickOrdre(); }
     else if((e.key==="Enter" || e.key===" ") && quiz.picked!==null){ e.preventDefault(); next(); }
     else if(key==="f"){ e.preventDefault(); toggleFav(); }
     else if(key==="s"){ e.preventDefault(); openRep(); }

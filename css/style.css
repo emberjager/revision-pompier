@@ -444,3 +444,16 @@ a.btn{color:inherit}
 .bstats i{font-style:normal;font-weight:700}
 .bstats i.up{color:var(--ok)} .bstats i.down{color:var(--bad)}
 .bweak{margin:6px 0 0;padding-left:1.4em;display:grid;gap:4px}
+
+/* Remettre dans l'ordre */
+.ordre{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.oitem{display:flex;gap:10px;align-items:center;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 8px 6px 0;min-height:52px;cursor:grab;user-select:none;-webkit-user-select:none}
+.oitem:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.oitem .grip{flex:none;width:40px;align-self:stretch;display:grid;place-items:center;color:var(--muted);font-size:1.15rem;touch-action:none}
+.oitem .onum{flex:none;min-width:1.4em;font-family:var(--mono);font-size:.8rem;color:var(--muted)}
+.oitem .otx{flex:1;min-width:0}
+.oitem .obtn{display:flex;gap:4px;flex:none}
+.oitem .obtn .btn{min-width:40px;min-height:40px;padding:4px 8px}
+.oitem.drag{position:relative;z-index:1;cursor:grabbing;border-color:var(--ink);background:var(--sunk);box-shadow:0 6px 16px rgba(0,0,0,.18)}
+.oitem.right{background:var(--ok-soft);border-color:var(--ok);cursor:default}
+.oitem.wrong{background:var(--bad-soft);border-color:var(--bad);cursor:default}

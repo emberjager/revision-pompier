@@ -68,6 +68,7 @@ Réponses de l'utilisateur : garder les deux voies (externe classique = QCM math
 - ☑ **R6. Maths illimitées** : exercices générés avec des chiffres différents à chaque fois (débits, autonomie, conversions, vitesses, pourcentages, aires/volumes), réponse calculée par le code.
 - ☑ **R7. Étude de texte** (fait : 2 sujets 2023 externe et SPV ; textes d’entraînement Licence Ouverte encore à proposer) : QCM sur un texte. Annales (questions + lien PDF) ; textes d'entraînement possibles sous Licence Ouverte (rapports et sites publics) à proposer à l'utilisateur.
 - ☑ **R8. Fiches synthèse par GTO/GDO** : une page par référentiel avec les chiffres clés, tirée des PDF de cours/ (toujours sourcée). Ne pas toucher aux fiches existantes (C4 en attente). → Fait : js/synth.js (13 référentiels, 136 chiffres clés repris des explications sourcées), section « Synthèses par référentiel » en bas de Fiches. Note : le GTO FDF varie sur le seuil CCFM/CCFS (14 t p. 15, 16 t dans le tableau des capacités).
+- ☑ **R9. Remettre dans l'ordre** (fait le 2026-11-11 : js/ordre.js, 11 séquences sourcées : MGO secours routier, 5 i, MGO incendie, champs communs, sauvetage-déblaiement, SMES, SOIEC, SAOIELC, message de compte rendu, phases d'une opération) : format QCM « Remettre dans l'ordre », glisser à la souris ou au doigt par la poignée, flèches ↑ ↓ au clavier, juste seulement si tout l'ordre est exact.
 
 ## Phase T — Technique (en parallèle)
 - ☐ **T1. Chargement plus rapide** :
